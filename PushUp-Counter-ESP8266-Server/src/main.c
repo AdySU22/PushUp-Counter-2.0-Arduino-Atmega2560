@@ -42,6 +42,6 @@ void user_init(void) {
 
 	#endif
 	while (1) {
-
+		vTaskDelay(1);
 	}
 }

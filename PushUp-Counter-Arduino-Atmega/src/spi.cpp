@@ -7,10 +7,6 @@ volatile uint8_t spi_status = SPI_STATE_UNINITIALIZED;
 
 #define SPI_DUMMY_BYTE 0
 
-void init_spi(void) {
-	init_spi(false);
-}
-
 void init_spi(const bool async_mode) {
 	// Set MOSI pin as output and MISO pin as input
 	SPI_DDR = (SPI_DDR & ~SPI_MISO_PIN_MASK) | (SPI_MOSI_PIN_MASK) | (SPI_SCK_PIN_MASK) | (SPI_CS_PIN_MASK);
@@ -19,8 +15,6 @@ void init_spi(const bool async_mode) {
 	SPCR = (1 << MSTR) | (1 << SPR0);
 	SPCR |= (1 << SPE) | (async_mode << SPIE);
 	spi_status = SPI_STATE_IDLE_SYNC | async_mode;
-	volatile uint8_t t __attribute__((unused)) = SPSR;
-	SPDR = 0;
 }
 
 bool set_spi_async(const bool set_async) {
@@ -47,9 +41,7 @@ bool master_transmit_sync(const uint8_t *data, const uint8_t len) {
 	for (uint8_t i = 0; i < len; i++) {
 		SPDR = data[i];
 		// Poll for every byte
-		while (!(SPSR & (1 << SPIF))) {
-			// TODO: implement timeout and return false
-		}
+		while (!(SPSR & (1 << SPIF))) {}
 		volatile uint8_t temp __attribute__((unused)) = SPSR; // Read SPSR first per datasheet
         temp = SPDR; // Then read SPDR to clear SPIF
 	}
@@ -78,10 +70,7 @@ bool master_receive_sync(uint8_t *data, const uint8_t len) {
 	for (uint8_t i = 0; i < len; i++) {
 		// Wait for byte transfer
 		SPDR = SPI_DUMMY_BYTE;
-		while(!(SPSR & (1 << SPIF))) {
-			// delay_ms(100);
-			// TODO: implement timeout and return false
-		};
+		while(!(SPSR & (1 << SPIF))) {};
 		volatile uint8_t tmp __attribute__((unused)) = SPSR;
 		data[i] = SPDR;
 	}

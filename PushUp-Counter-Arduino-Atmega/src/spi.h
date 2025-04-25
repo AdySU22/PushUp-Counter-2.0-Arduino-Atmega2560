@@ -5,10 +5,10 @@
 #include "timer.h"
 #include <avr/interrupt.h>
 
-#define SPI_ASYNC 0
-#define SPI_SYNC 1
+#define SPI_SYNC 0
+#define SPI_ASYNC 1
 
-#define SPI_STATE_SYNC_BIT_MASK 		0x1 // SPI transaction mode (0 = async, 1 = sync)
+#define SPI_STATE_SYNC_BIT_MASK 		0x1 // SPI transaction mode (0 = sync, 1 = async)
 #define SPI_STATE_BUS_ACTIVE_BIT_MASK 	0x2 // SPI bus is active/sending (0 = idle, 1 = busy)
 #define SPI_STATE_DATA_DIR_BIT_MASK 	0x4 // SPI data direction (0 = tx, 1 = rx)
 

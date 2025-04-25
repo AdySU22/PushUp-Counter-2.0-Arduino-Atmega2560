@@ -3,6 +3,7 @@
 
 #include <avr/io.h>
 #define TODO() static_assert(false, "TODO: implementation needed in " __FILE__);
+#define INFRARED_VCC_ENABLE
 
 // Debug print macros
 #ifdef Arduino_h
@@ -53,7 +54,12 @@
 // PIN numbers
 #ifndef PIN_NUMBERS__
 #define PIN_NUMBERS__
-
+#ifdef INFRARED_VCC_ENABLE
+/** @brief analog pin 8 (18) */
+#define INFRARED_SENSOR_GND_PIN_NUMBER PK0
+/** @brief analog pin 10 (20) */
+#define INFRARED_SENSOR_VCC_PIN_NUMBER PK2
+#endif // INFRARED_VCC_ENABLE
 /** @brief analog pin 9 (19) / digital pin 63 (D63) */
 #define INFRARED_SENSOR_PIN_NUMBER PK1
 /** @brief digital pin 15 (D15) */
@@ -85,6 +91,11 @@
 #ifndef PIN_MASKS__
 #define PIN_MASKS__
 
+#ifdef INFRARED_VCC_ENABLE
+#define INFRARED_SENSOR_GND_PIN_MASK (1 << INFRARED_SENSOR_GND_PIN_NUMBER)
+#define INFRARED_SENSOR_VCC_PIN_MASK (1 << INFRARED_SENSOR_VCC_PIN_NUMBER)
+
+#endif // INFRARED_VCC_ENABLE
 #define INFRARED_SENSOR_PIN_MASK (1 << INFRARED_SENSOR_PIN_NUMBER)
 #define RESET_SWITCH_PIN_MASK (1 << RESET_SWITCH_PIN_NUMBER)
 #define LEFT_TOUCH_SENSOR_PIN_MASK (1 << LEFT_TOUCH_SENSOR_PIN_NUMBER)

@@ -7,15 +7,22 @@
 #include "touch_sensor.h"
 #include "spi.h"
 
+#define RESET_SWITCH_BEFORE_PRESS 0
 #define RESET_SWITCH_PRESSED 1
-#define RESET_SWITCH_RELEASED 0
+#define RESET_SWITCH_RELEASED 2
+#define RESET_SWITCH_AFTER_RELEASE 3
 
+// Arms straight
+#define UP_POSITION 0
 // Downward movement
-#define MOVEMENT_DOWN 1
+#define MOVING_DOWN 1
+// Arms bent
+#define DOWN_POSITION 2 
 // Upward movement
-#define MOVEMENT_UP 0
+#define MOVING_UP 3
 
-volatile bool switch_state = RESET_SWITCH_RELEASED, ir_sensor_state = MOVEMENT_UP, touch_sensors_triggered = 0;
+volatile uint8_t switch_state = RESET_SWITCH_BEFORE_PRESS, ir_sensor_state = UP_POSITION; 
+volatile bool touch_sensors_triggered = 0;
 volatile uint16_t push_up_count = 0;
 
 int16_t main(void) {
@@ -31,31 +38,71 @@ int16_t main(void) {
 	init_lcd();
 
 	while (1) {
-		
-		write_str("HELLO FROM I2C");
-		delay_s(2);
-		clear_screen();
-		move_cursor(1, 0);
-		write_str("HELLO FROM I2C");
-		delay_s(2);
-		move_cursor(0, 0);
-		clear_screen();
+		switch (switch_state) {
+			case RESET_SWITCH_PRESSED: {
+				switch_state = RESET_SWITCH_RELEASED;
+			} break;
+			case RESET_SWITCH_AFTER_RELEASE: {
+				switch_state = RESET_SWITCH_BEFORE_PRESS;
+				// TODO: SEND DATA TO SERVER
+				clear_screen();
+				write_str("Resetting...");
+				delay_s(5);
+				clear_screen();
+				write_str("Ready!");
+				delay_s(3);
+				clear_screen();
+			} break;
+			default:
+				break;
+		}
+		switch (ir_sensor_state) {
+			case MOVING_DOWN: {
+				ir_sensor_state = DOWN_POSITION;
+			} break;
+			case MOVING_UP: {
+				ir_sensor_state = UP_POSITION;
+				move_cursor(1, 0);
+				write_char('0');
+				write_char('0');
+			} break;
+			default:
+				break;
+		}
+		// write_str("HELLO FROM I2C");
+		// delay_s(2);
+		// clear_screen();
+		// move_cursor(1, 0);
+		// write_str("HELLO FROM I2C");
+		// delay_s(2);
+		// move_cursor(0, 0);
+		// clear_screen();
 	}
 	return 0;
 }
 
 ISR(RESET_SWITCH_PCINT_VECTOR) {
-    if (switch_state == RESET_SWITCH_PRESSED) {
-		push_up_count = 0;
+	switch (switch_state) {
+		case RESET_SWITCH_BEFORE_PRESS: {
+			switch_state = RESET_SWITCH_PRESSED;
+		} break;
+		case RESET_SWITCH_RELEASED: {
+			switch_state = RESET_SWITCH_BEFORE_PRESS;
+		} break;
+		default: break;
 	}
-	switch_state ^= switch_state;
 }
 
 ISR(INFRARED_SENSOR_PCINT_VECTOR) {
-	if (touch_sensors_triggered && ir_sensor_state == MOVEMENT_DOWN) {
-		push_up_count++;
+	switch (ir_sensor_state) {
+		case UP_POSITION: {
+			ir_sensor_state = MOVING_DOWN;
+		} break;
+		case DOWN_POSITION: {
+			ir_sensor_state = MOVING_UP;
+		} break;
+		default: break;
 	}
-	ir_sensor_state ^= ir_sensor_state;
 }
 
 #ifdef TOUCH_SENSORS_PCIE_NUMBER
