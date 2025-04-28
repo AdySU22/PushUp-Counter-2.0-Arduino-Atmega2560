@@ -1,17 +1,18 @@
 #ifndef COMMON_H__
 #define COMMON_H__
 
+#include <Arduino.h>
 #include <avr/io.h>
 #define TODO() static_assert(false, "TODO: implementation needed in " __FILE__);
 #define INFRARED_VCC_ENABLE
 
 // Debug print macros
 #ifdef Arduino_h
-
+#define DEBUG_INIT(baud) Serial.begin((baud))
 #define DEBUG_PRINT(...) Serial.print(__VA_ARGS__)
 #define DEBUG_PRINTLN(...) Serial.println(__VA_ARGS__)
 #else
-
+#define DEBUG_INIT(baud) (void)(baud)
 #define DEBUG_PRINT(...) (void)(__VA_ARGS__)
 #define DEBUG_PRINTLN(...) (void)(__VA_ARGS__)
 #ifndef HEX
@@ -49,19 +50,32 @@
 #define SPI_PORT PORTB
 #define I2C_PORT PORTD
 
-#endif // PORTS__
+#endif // 
+
+#ifndef PINS__
+#define PINS__
+
+#define RESET_SWITCH_PIN PINJ
+#define LEFT_TOUCH_SENSOR_PIN PINB
+#define RIGHT_TOUCH_SENSOR_PIN PINB
+
+#ifdef TOUCH_SENSORS_DDR
+#define TOUCH_SENSORS_PINS PINB
+#endif
+
+#endif // PINS__
 
 // PIN numbers
 #ifndef PIN_NUMBERS__
 #define PIN_NUMBERS__
 #ifdef INFRARED_VCC_ENABLE
-/** @brief analog pin 8 (18) */
-#define INFRARED_SENSOR_GND_PIN_NUMBER PK0
-/** @brief analog pin 10 (20) */
-#define INFRARED_SENSOR_VCC_PIN_NUMBER PK2
-#endif // INFRARED_VCC_ENABLE
 /** @brief analog pin 9 (19) / digital pin 63 (D63) */
-#define INFRARED_SENSOR_PIN_NUMBER PK1
+#define INFRARED_SENSOR_GND_PIN_NUMBER PK1
+/** @brief analog pin 8 (18) */
+#define INFRARED_SENSOR_VCC_PIN_NUMBER PK0
+#endif // INFRARED_VCC_ENABLE
+/** @brief analog pin 10 (20) */
+#define INFRARED_SENSOR_PIN_NUMBER PK2
 /** @brief digital pin 15 (D15) */
 #define RESET_SWITCH_PIN_NUMBER PJ0
 /** @brief digital pin 12 (D12)*/
@@ -165,7 +179,7 @@
 #ifndef PCINT_NUMBERS__
 #define PCINT_NUMBERS__
 
-#define INFRARED_SENSOR_PCINT_NUMBER PCINT17
+#define INFRARED_SENSOR_PCINT_NUMBER PCINT18
 #define RESET_SWITCH_PCINT_NUMBER PCINT9
 #define LEFT_TOUCH_SENSOR_PCINT_NUMBER PCINT6
 #define RIGHT_TOUCH_SENSOR_PCINT_NUMBER PCINT5
