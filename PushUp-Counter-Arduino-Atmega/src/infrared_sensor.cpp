@@ -11,3 +11,7 @@ void init_infrared_sensor_pin(void) {
 	PCICR |= INFRARED_SENSOR_PCIE_MASK;
 	INFRARED_SENSOR_PCMSK |= INFRARED_SENSOR_PCINT_MASK;
 }
+
+void toggle_infrared_sensor(void) {
+	INFRARED_SENSOR_PCMSK ^= INFRARED_SENSOR_PCINT_MASK;
+}

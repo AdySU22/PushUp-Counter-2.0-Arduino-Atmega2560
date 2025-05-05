@@ -7,3 +7,7 @@ void init_reset_switch_pin(void) {
 	PCICR |= RESET_SWITCH_PCIE_MASK;
 	RESET_SWITCH_PCMSK |= RESET_SWITCH_PCINT_MASK;
 }
+
+void toggle_reset_switch(void) {
+	RESET_SWITCH_PCMSK ^= RESET_SWITCH_PCINT_MASK;
+}

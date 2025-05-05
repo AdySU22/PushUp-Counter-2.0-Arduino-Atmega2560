@@ -27,13 +27,19 @@ volatile uint16_t push_up_count = 0;
 
 char buf[8] = {};
 
+void toggle_interrupts(void) {
+	// toggle_touch_sensor();
+	toggle_infrared_sensor();
+	toggle_reset_switch();
+}
+
 int16_t main(void) {
 	DEBUG_INIT(9600);
 	init_timer0();
 	init_timer1();
 	init_timer3();
 	init_touch_sensor_pins();
-	// init_spi(SPI_ASYNC);
+	init_spi(SPI_ASYNC);
 	init_i2c();
 	sei();
 	init_lcd();
@@ -51,25 +57,13 @@ int16_t main(void) {
 	move_cursor(0, 0);
 	write_str("Push-ups done:");
 	while (1) {
-		// switch (switch_state) {
-		// 	case RESET_SWITCH_PRESSED: {
-		// 		switch_state = RESET_SWITCH_RELEASED;
-		// 		delay_us_sync(10);
-		// 	} break;
-		// 	case RESET_SWITCH_AFTER_RELEASE: {
-		// 		switch_state = RESET_SWITCH_BEFORE_PRESS;
-		// 		// TODO: SEND DATA TO SERVER
-		// 		clear_screen();
-		// 		write_str("Resetting...");
-		// 		delay_s(5);
-		// 		clear_screen();
-		// 		write_str("Ready!");
-		// 		delay_s(1);
-		// 		clear_screen();
-		// 	} break;
-		// 	default:
-		// 		break;
-		// }
+		DEBUG_PRINT("Touch sensors active: ");
+		DEBUG_PRINT(TOUCH_SENSORS_PINS & TOUCH_SENSORS_PIN_MASK);
+		DEBUG_PRINT(", Reset switch pressed: ");
+		DEBUG_PRINT(reset_triggered);
+		DEBUG_PRINT(", Infrared sensor active: ");
+		DEBUG_PRINTLN(PINK & INFRARED_SENSOR_PIN_MASK);
+		continue;
 		switch (ir_sensor_state) {
 			case MOVING_DOWN: {
 				ir_sensor_state = DOWN_POSITION;
@@ -77,6 +71,7 @@ int16_t main(void) {
 			} break;
 			case MOVING_UP: {
 				#ifdef TOUCH_SENSORS_DDR
+				// Active high / low
 				push_up_count += (TOUCH_SENSORS_PINS & TOUCH_SENSORS_PIN_MASK) == 0;
 				#else 
 				push_up_count += !(LEFT_TOUCH_SENSORS_PIN & LEFT_TOUCH_SENSOR_PIN_MASK) && !(RIGHT_TOUCH_SENSOR_PIN & RIGHT_TOUCH_SENSOR_PIN_MASK);
@@ -90,32 +85,24 @@ int16_t main(void) {
 				break;
 		}
 		if (reset_triggered) {
+			toggle_interrupts();
+			reset_triggered = false;
 			clear_screen();
 			write_str("Resetting...");
-			delay_s(5);
+			delay_s(1);
+			int res = master_transmit_async((const uint8_t*)&push_up_count, sizeof(int16_t));
 			clear_screen();
-			write_str("Ready!");
+			write_str(res ? "Ready!" : "Send failed.");
 			delay_s(1);
 			clear_screen();
-			cli();
-			reset_triggered = false;
-			
-			sei();
+			toggle_interrupts();
 		}
-		// write_str("HELLO FROM I2C");
-		// delay_s(2);
-		// clear_screen();
-		// move_cursor(1, 0);
-		// write_str("HELLO FROM I2C");
-		// delay_s(2);
-		// move_cursor(0, 0);
-		// clear_screen();
 	}
 	return 0;
 }
 
 ISR(RESET_SWITCH_PCINT_VECTOR) {
-	reset_triggered = (RESET_SWITCH_PIN & RESET_SWITCH_PIN_MASK) == RESET_SWITCH_PIN_MASK;
+	reset_triggered = RESET_SWITCH_PIN & RESET_SWITCH_PIN_MASK;
 }
 
 ISR(INFRARED_SENSOR_PCINT_VECTOR) {
