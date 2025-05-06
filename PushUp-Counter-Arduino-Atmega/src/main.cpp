@@ -43,9 +43,41 @@ int16_t main(void) {
 	init_i2c();
 	sei();
 	init_lcd();
-	write_str("Press both ");
-	write_str("buttons to start");
-	while (TOUCH_SENSORS_PINS & TOUCH_SENSORS_PIN_MASK) {}
+
+	int dbg = 0;
+	dbg = clear_screen();
+	DEBUG_PRINT_VERBOSE("Command result: ");
+	DEBUG_PRINTLN_VERBOSE(dbg);
+	dbg = write_str("Press both");
+	DEBUG_PRINT_VERBOSE("Command result: ");
+	DEBUG_PRINTLN_VERBOSE(dbg);
+	dbg = move_cursor(1,0);
+	DEBUG_PRINT_VERBOSE("Command result: ");
+	DEBUG_PRINTLN_VERBOSE(dbg);
+	dbg = write_str("buttons to start");
+	DEBUG_PRINT_VERBOSE("Command result: ");
+	DEBUG_PRINTLN_VERBOSE(dbg);
+	while (TOUCH_SENSORS_PINS & TOUCH_SENSORS_PIN_MASK) {
+		configure_display(true, true, true);
+		if (!lcd_initialized) {
+			dbg = clear_screen();
+			DEBUG_PRINT_DEBUG("Command result: ");
+			DEBUG_PRINTLN_DEBUG(dbg);
+			init_lcd();
+			dbg = write_str("Press both ");
+			DEBUG_PRINT_DEBUG("Command result: ");
+			DEBUG_PRINTLN_DEBUG(dbg);
+			dbg = move_cursor(1,0);
+			DEBUG_PRINT_DEBUG("Command result: ");
+			DEBUG_PRINTLN_DEBUG(dbg);
+			dbg = write_str("buttons to start");
+			DEBUG_PRINT_DEBUG("Command result: ");
+			DEBUG_PRINTLN_DEBUG(dbg);
+		}
+		DEBUG_PRINTLN("Waiting...");
+		DEBUG_PRINTLN(i2c_status);
+		delay_s(1);
+	}
 	init_reset_switch_pin();
 	init_infrared_sensor_pin();
 	clear_screen();
@@ -63,6 +95,12 @@ int16_t main(void) {
 		DEBUG_PRINT(reset_triggered);
 		DEBUG_PRINT(", Infrared sensor active: ");
 		DEBUG_PRINTLN(PINK & INFRARED_SENSOR_PIN_MASK);
+		if (!lcd_initialized) {
+			init_lcd();
+			clear_screen();
+			move_cursor(0, 0);
+			write_str("Push-ups done:");
+		}
 		continue;
 		switch (ir_sensor_state) {
 			case MOVING_DOWN: {

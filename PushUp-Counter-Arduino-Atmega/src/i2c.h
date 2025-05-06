@@ -115,7 +115,7 @@ void stop_i2c(void);
 // Static variables
 
 // Current state of the I2C FSM
-static volatile uint8_t i2c_status;       
+extern volatile uint8_t i2c_status;
 
 #endif // I2C_H__
 

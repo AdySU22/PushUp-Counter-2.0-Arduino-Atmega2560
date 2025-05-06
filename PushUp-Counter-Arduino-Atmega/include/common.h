@@ -1,13 +1,21 @@
 #ifndef COMMON_H__
 #define COMMON_H__
 
-#include <Arduino.h>
+#include <stdio.h>
 #include <avr/io.h>
 #define TODO() static_assert(false, "TODO: implementation needed in " __FILE__);
 #define INFRARED_VCC_ENABLE
 
+#define LOG_LEVEL_NONE 0
+#define LOG_LEVEL_INFO 1
+#define LOG_LEVEL_DEBUG 2
+#define LOG_LEVEL_VERBOSE 3
+#define LOG_LEVEL LOG_LEVEL_DEBUG
+
+
 // Debug print macros
-#ifdef Arduino_h
+#if LOG_LEVEL > LOG_LEVEL_NONE
+#include <Arduino.h>
 #define DEBUG_INIT(baud) Serial.begin((baud))
 #define DEBUG_PRINT(...) Serial.print(__VA_ARGS__)
 #define DEBUG_PRINTLN(...) Serial.println(__VA_ARGS__)
@@ -15,11 +23,34 @@
 #define DEBUG_INIT(baud) (void)(baud)
 #define DEBUG_PRINT(...) (void)(__VA_ARGS__)
 #define DEBUG_PRINTLN(...) (void)(__VA_ARGS__)
+#endif // LOG_LEVEL > LOG_LEVEL_NONE
 #ifndef HEX
 #define HEX 16
 #endif // HEX
 
-#endif // Arduino_h
+#if LOG_LEVEL >= LOG_LEVEL_VERBOSE
+#define DEBUG_PRINT_VERBOSE(...) DEBUG_PRINT(__VA_ARGS__)
+#define DEBUG_PRINTLN_VERBOSE(...) DEBUG_PRINTLN(__VA_ARGS__)
+#else
+#define DEBUG_PRINT_VERBOSE(...) (void)(__VA_ARGS__)
+#define DEBUG_PRINTLN_VERBOSE(...) (void)(__VA_ARGS__)
+#endif // LOG_LEVEL >= LOG_LEVEL_VERBOSE
+
+#if LOG_LEVEL >= LOG_LEVEL_DEBUG
+#define DEBUG_PRINT_DEBUG(...) DEBUG_PRINT(__VA_ARGS__)
+#define DEBUG_PRINTLN_DEBUG(...) DEBUG_PRINTLN(__VA_ARGS__)
+#else
+#define DEBUG_PRINT_DEBUG(...) (void)(__VA_ARGS__)
+#define DEBUG_PRINTLN_DEBUG(...) (void)(__VA_ARGS__)
+#endif // LOG_LEVEL >= LOG_LEVEL_DEBUG
+
+#if LOG_LEVEL >= LOG_LEVEL_INFO
+#define DEBUG_PRINT_INFO(...) DEBUG_PRINT(__VA_ARGS__)
+#define DEBUG_PRINTLN_INFO(...) DEBUG_PRINTLN(__VA_ARGS__)
+#else
+#define DEBUG_PRINT_INFO(...) (void)(__VA_ARGS__)
+#define DEBUG_PRINTLN_INFO(...) (void)(__VA_ARGS__)
+#endif // LOG_LEVEL >= LOG_LEVEL_INFO
 
 // DDRs
 #ifndef DDRS__

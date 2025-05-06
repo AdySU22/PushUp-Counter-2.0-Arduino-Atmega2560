@@ -12,11 +12,14 @@
 #define LCD_BACKLIGHT_BIT_MASK 0x8
 
 void init_lcd(void);
-void send_bits(uint8_t data, uint8_t flags);
-void move_cursor(bool y, uint8_t x);
-void write_char(uint8_t character);
-void send_command(uint8_t command);
-void write_str(const char* str);
-void clear_screen(void);
+uint8_t send_bits(uint8_t data, uint8_t flags);
+uint8_t move_cursor(bool y, uint8_t x);
+uint8_t write_char(uint8_t character);
+uint8_t send_command(uint8_t command);
+uint8_t write_str(const char* str);
+uint8_t clear_screen(void);
+uint8_t configure_display(const bool display_on, const bool cursor_on, const bool blink_on);
+
+extern bool lcd_initialized;
 
 #endif

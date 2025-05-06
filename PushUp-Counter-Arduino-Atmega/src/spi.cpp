@@ -121,10 +121,15 @@ ISR(SPI_STC_vect) {
 				// Signal completion and reset status to idle
 				spi_status = SPI_STATE_IDLE_ASYNC;  
 			}
-		} break; 
+		} break;
+		case SPI_STATE_IDLE_SYNC: 
+		case SPI_STATE_IDLE_ASYNC: {
+			DEBUG_PRINT("SPI Idle.\n");
+		} break;
 		default:
 			SPI_PORT |= SPI_CS_PIN_MASK;
-			DEBUG_PRINT("Got error");
+			DEBUG_PRINT("Got error ");
+			DEBUG_PRINTLN(spi_status);
 			break;
 	}
 }
