@@ -104,6 +104,8 @@
 	"netif.h": "c",
 	"tcpip.h": "c",
 	"opt.h": "c",
-	"c_types.h": "c"
+	"c_types.h": "c",
+	"list.h": "c",
+	"debug.h": "c"
 }
 }

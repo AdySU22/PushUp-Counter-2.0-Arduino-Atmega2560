@@ -1,4 +1,7 @@
 #include "client.h"
+#include "spi.h"
+
+#define MAX(x, y) ((x) < (y) ? (y) : (x))
 
 extern xSemaphoreHandle scan_semaphore; 
 extern xSemaphoreHandle accept_semaphore;
@@ -6,11 +9,12 @@ extern xSemaphoreHandle client_list_mutex;
 bool use_open_wifi = false;
 conn_config_t *selected_ap = NULL;
 
-#define HEADER_END "\r\n\r\n"
-
 static int server_sock, active_client_socks[MAX_CLIENT_NUM], processed_client_socks[MAX_CLIENT_NUM], processed_client_socks_len;
 int *active_ptr = &active_client_socks[0], *processed_ptr = &processed_client_socks[0];
 int num_clients;
+
+static http_packet_t packet;
+static http_request_info_t req_info;
 
 void set_use_open_wifi(bool use) {
 	use_open_wifi = use;
@@ -30,12 +34,12 @@ void scan_callback(void *arg, STATUS status) {
 				switch (bss_info->authmode) {
 					case AUTH_OPEN: {
 						os_printf("OPEN\n");
-						if (use_open_wifi && bss_info->rssi >= selected_ap->rssi) {
+						if (use_open_wifi && bss_info->rssi != 31 && bss_info->rssi >= selected_ap->rssi) {
 							selected_ap->sta_conf.bssid_set = 0;
 							selected_ap->rssi = bss_info->rssi;
 							memcpy(selected_ap->sta_conf.ssid, bss_info->ssid, strlen(bss_info->ssid));
 						}
-						os_printf("Connected to %s: %s\n", selected_ap->sta_conf.ssid, wifi_station_connect() ? "True" : "False");
+						// os_printf("Connected to %s: %s\n", selected_ap->sta_conf.ssid, wifi_station_connect() ? "True" : "False");
 					} break;
 					case AUTH_WEP: {
 						os_printf("WEP\n");
@@ -76,15 +80,7 @@ void scan_callback(void *arg, STATUS status) {
 
 int32_t init_server(void) {
 	if (!wifi_set_opmode_current(STATIONAP_MODE)) return 1;
-	sta_config_t sta_conf = {
-		.password = STA_PASS,
-		.ssid = STA_SSID
-	};
 	selected_ap = os_malloc(sizeof(conn_config_t));
-	*selected_ap = (conn_config_t){
-		.sta_conf = sta_conf,
-		.rssi = 31
-	};
 	ap_config_t ap_conf = {
 		.ssid_len = AP_SSID_LENGTH,
 		.channel = CHANNEL,
@@ -95,22 +91,28 @@ int32_t init_server(void) {
 	memcpy(ap_conf.ssid, AP_SSID, AP_SSID_LENGTH);
 	memcpy(ap_conf.password, AP_PASS, AP_PASS_LENGTH);
 	if (!wifi_softap_set_config_current(&ap_conf)) return 2;
-	if (!wifi_set_channel(CHANNEL)) return 3;
 	scan_config_t scan_conf = {
 		.bssid = NULL,
-		.channel = CHANNEL,
+		.channel = 0,
 		.show_hidden = true,
 	};
 	wifi_station_scan(&scan_conf, scan_callback);
 	dchp_status_t dhcp = wifi_softap_dhcps_status();
 	os_printf("dhcp status: %s\n", dhcp == DHCP_STARTED ? "Started" : "Stopped");
 	os_printf("WiFi AP SSID: %s\nWifi Password: %s\n", AP_SSID, AP_PASS);
+	sta_config_t sta_conf = {};
+	memcpy(sta_conf.password, STA_PASS, strlen(STA_PASS));
+	memcpy(sta_conf.ssid, STA_SSID, strlen(STA_SSID));
+	*selected_ap = (conn_config_t){
+		.sta_conf = sta_conf,
+		.rssi = 31
+	};
 	if (!wifi_station_set_config(&sta_conf)) {
 		return 4;
 	}
 	os_printf("Connecting to %s\n", STA_SSID);
-	if (!wifi_station_connect()) {
-		os_printf("Failed to connect to %s\n", STA_SSID);
+	if (!wifi_station_connect()) { 
+		os_printf("Failed to initiate station connection!\n"); 
 		return 5;
 	}
 	switch (wifi_station_get_connect_status()) {
@@ -153,68 +155,57 @@ void print_station_clients(void) {
 	wifi_softap_free_station_info();
 }
 
-int32_t send_data(uint16_t data) {
-	
-}
-
 int32_t init_sockets(void) {
-	lwip_socket_init();
 	int res = 0;
 	int option = 1;
+	os_printf("errno: %p\n", errno);
 	server_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	int curr_errno = errno;
 	if (server_sock < 0) {
-		printf("Error creating server socket: %s\n", strerror(curr_errno));
-		return curr_errno;	
+		printf("Error creating server socket: %s\n", strerror(errno));
+		return errno;	
 	}
 	
 	res = setsockopt(server_sock, SOL_SOCKET, SO_KEEPALIVE, &option, sizeof(option));
-	curr_errno = errno;
 	if (res < 0) {
-		os_printf("Error setting SO_KEEPALIVE option for server socket: %s\n", strerror(curr_errno));
-		return curr_errno;
+		os_printf("Error setting SO_KEEPALIVE option for server socket: %s\n", strerror(errno));
+		return errno;
 	}
 	
 	int keep_idle = 30; // Time in seconds until the first probe on an idle connection
 	res = setsockopt(server_sock, IPPROTO_TCP, TCP_KEEPIDLE, &keep_idle, sizeof(keep_idle));
-	curr_errno = errno;
 	if (res < 0) {
-		os_printf("Error setting TCP_KEEPIDLE option for server socket: %s\n", strerror(curr_errno));
-		return curr_errno;
+		os_printf("Error setting TCP_KEEPIDLE option for server socket: %s\n", strerror(errno));
+		return errno;
 	} 
 	
 	// Set interval between probes
 	int keep_intvl = 5; // Time in seconds between subsequent probes
 	res = setsockopt(server_sock, IPPROTO_TCP, TCP_KEEPINTVL, &keep_intvl, sizeof(keep_intvl));
-	curr_errno = errno;
 	if (res < 0) {
-		os_printf("Error setting TCP_KEEPINTVL option for server socket: %s\n", strerror(curr_errno));
-		return curr_errno;
+		os_printf("Error setting TCP_KEEPINTVL option for server socket: %s\n", strerror(errno));
+		return errno;
 	}
 	
 	// Set number of probes before dropping connection
 	int keep_cnt = 3; // Number of probes before connection is considered dead
 	res = setsockopt(server_sock, IPPROTO_TCP, TCP_KEEPCNT, &keep_cnt, sizeof(keep_cnt));
-	curr_errno = errno;
 	if (res < 0) {
-		os_printf("Error setting TCP_KEEPCNT option for server socket: %s\n", strerror(curr_errno));
-		return curr_errno;
+		os_printf("Error setting TCP_KEEPCNT option for server socket: %s\n", strerror(errno));
+		return errno;
 	}
 	
 	int flags = fcntl(server_sock, F_GETFL, 0);
-	curr_errno = errno;
 	if (flags < 0) {
-		os_printf("Error getting socket flags: %s\n", strerror(curr_errno));
-		return curr_errno;
+		os_printf("Error getting socket flags: %s\n", strerror(errno));
+		return errno;
 	}
 	
 	// Set non-blocking flag
 	flags |= O_NONBLOCK; // Add O_NONBLOCK flag
 	
 	if (fcntl(server_sock, F_SETFL, flags) < 0) {
-		curr_errno = errno;
-		os_printf("Error setting socket flags: %s\n", strerror(curr_errno));
-		return curr_errno;
+		os_printf("Error setting socket flags: %s\n", strerror(errno));
+		return errno;
 	}
 	
 	struct sockaddr_in address = {
@@ -227,23 +218,20 @@ int32_t init_sockets(void) {
 	};
 
 	res = bind(server_sock, (struct sockaddr*)&address, sizeof(struct sockaddr));
-	curr_errno = errno;
 	if (res < 0) {
-		os_printf("Error listening to %d: %s\n", 0, strerror(curr_errno));
-		return curr_errno;
+		os_printf("Error listening to %d: %s\n", 0, strerror(errno));
+		return errno;
 	}
 
 	struct sockaddr_in bound_address;
     socklen_t bound_address_len = sizeof(bound_address);
 	res = lwip_getsockname(server_sock, (struct sockaddr *)&bound_address, &bound_address_len);
-	curr_errno = errno;
 	if (res < 0) {
-		os_printf("Failed to get server's socket address: %s\n", strerror(curr_errno));
-		return curr_errno;
+		os_printf("Failed to get server's socket address: %s\n", strerror(errno));
+		return errno;
 	}
 
 	res = listen(server_sock, 4);
-	curr_errno = errno;
 	int8_t ip_address[4] = {
 		((bound_address.sin_addr.s_addr >> 24) & 0xFF), 
 		((bound_address.sin_addr.s_addr >> 16) & 0xFF), 
@@ -251,8 +239,8 @@ int32_t init_sockets(void) {
 		bound_address.sin_addr.s_addr & 0xFF
 	};
 	if (res < 0) {
-		os_printf("Error listening to %d.%d.%d.%d:%d: %s\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3], ntohs(bound_address.sin_port), strerror(curr_errno));
-		return curr_errno;
+		os_printf("Error listening to %d.%d.%d.%d:%d: %s\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3], ntohs(bound_address.sin_port), strerror(errno));
+		return errno;
 	}
 	os_printf("Server listening at %d.%d.%d.%d:%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3], ntohs(bound_address.sin_port));
 	return 0;
@@ -265,9 +253,9 @@ void scan_task(void *arg) {
 			os_printf("FATAL: scan_task failed to take semaphore.\n");
 			while(1) { vTaskDelay(1000); } // Halt
 		}
-		os_printf("%s Bytes used: %d\n", __FUNCTION__, uxTaskGetStackHighWaterMark(NULL));
-		os_printf("Heap bytes remaining: %u\n", xPortGetFreeHeapSize());
-		os_printf("Connected to %s\n", selected_ap->sta_conf.ssid);
+		os_printf("[%s] Max bytes used: %d\n", __FUNCTION__, uxTaskGetStackHighWaterMark(NULL));
+		os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
+		os_printf("Connected to %s\n", selected_ap->rssi != 31 ? (char*)selected_ap->sta_conf.ssid : "None");
 		os_printf("Connection Status: ");
 		switch (wifi_station_get_connect_status()) {
 			case STATION_IDLE: {
@@ -302,83 +290,174 @@ void scan_task(void *arg) {
 
 void accept_task(void *arg) {
 	while (1) {
-		if (xSemaphoreTake(accept_semaphore, portMAX_DELAY) != pdTRUE) {
-			os_printf("FATAL: accept_task failed to take semaphore.\n");
-			while(1) { vTaskDelay(1000); } // Halt
-		}
-		if (xSemaphoreTake(client_list_mutex, portMAX_DELAY) != pdTRUE) {
-			os_printf("FATAL: accept_task failed to take mutex.\n");
-			while(1) { vTaskDelay(1000); } // Halt
-		}
+		xSemaphoreTake(accept_semaphore, portMAX_DELAY);
+		os_printf("[%s] Max bytes used: %d\n", __FUNCTION__, uxTaskGetStackHighWaterMark(NULL));
+		os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
+		
 		int client = accept(server_sock, NULL, NULL);
-		int curr_errno = errno;
 		if (client < 0) {
-			if (curr_errno != EWOULDBLOCK) {
-				os_printf("Failed to accept client due to %d: %s\n", curr_errno, strerror(curr_errno));
+			if (errno != EWOULDBLOCK) {
+				os_printf("Failed to accept client due to %d: %s\n", errno, strerror(errno));
 			} else {
 				os_printf("Call to accept() would block.\n");
 			}
+			if (xSemaphoreGive(accept_semaphore) != pdTRUE) {
+				os_printf("[%s] FATAL: Failed to return semaphore on error.\n", __FUNCTION__);
+				while (1) vTaskDelay(1);
+			}
 			goto accept_end;
 		} else if (num_clients < MAX_CLIENT_NUM) {
-			os_printf("Accepted client.");
+			xSemaphoreTake(client_list_mutex, portMAX_DELAY);
+			os_printf("Accepted client %d.", client);
 			int option = 1;
 			int res = setsockopt(client, SOL_SOCKET, SO_KEEPALIVE, &option, sizeof(option));
-			curr_errno = errno;
 			if (res < 0) {
-				os_printf("Error setting SO_KEEPALIVE option for client socket %d: %s\n", num_clients, strerror(curr_errno));
+				os_printf("Error setting SO_KEEPALIVE option for client socket %d: %s\n", num_clients, strerror(errno));
 				goto accept_cleanup;
 			} 
 			int keep_idle = 30; // Time in seconds until the first probe on an idle connection
 			res = setsockopt(client, IPPROTO_TCP, TCP_KEEPIDLE, &keep_idle, sizeof(keep_idle));
-			curr_errno = errno;
 			if (res < 0) {
-				os_printf("Error setting TCP_KEEPIDLE option for server socket: %s\n", strerror(curr_errno));
+				os_printf("Error setting TCP_KEEPIDLE option for server socket: %s\n", strerror(errno));
 				goto accept_cleanup;
 			} 
 			
 			// Set interval between probes
 			int keep_intvl = 5; // Time in seconds between subsequent probes
 			res = setsockopt(client, IPPROTO_TCP, TCP_KEEPINTVL, &keep_intvl, sizeof(keep_intvl));
-			curr_errno = errno;
 			if (res < 0) {
-				os_printf("Error setting TCP_KEEPINTVL option for server socket: %s\n", strerror(curr_errno));
+				os_printf("Error setting TCP_KEEPINTVL option for server socket: %s\n", strerror(errno));
 				goto accept_cleanup;
 			}
 			
 			// Set number of probes before dropping connection
 			int keep_cnt = 3; // Number of probes before connection is considered dead
 			res = setsockopt(client, IPPROTO_TCP, TCP_KEEPCNT, &keep_cnt, sizeof(keep_cnt));
-			curr_errno = errno;
 			if (res < 0) {
-				os_printf("Error setting TCP_KEEPCNT option for server socket: %s\n", strerror(curr_errno));
+				os_printf("Error setting TCP_KEEPCNT option for server socket: %s\n", strerror(errno));
 				goto accept_cleanup;
 			}
 			
 			int flags = fcntl(client, F_GETFL, 0);
-			curr_errno = errno;
 			if (flags < 0) {
-				os_printf("Error getting socket flags: %s\n", strerror(curr_errno));
+				os_printf("Error getting socket flags: %s\n", strerror(errno));
 				goto accept_cleanup;
 			}
 			
 			// Set non-blocking flag
-			flags |= O_NONBLOCK; // Add O_NONBLOCK flag
+			flags |= O_NONBLOCK;
 			
 			if (fcntl(client, F_SETFL, flags) < 0) {
-				curr_errno = errno;
-				os_printf("Error setting socket flags: %s\n", strerror(curr_errno));
+				os_printf("Error setting socket flags: %s\n", strerror(errno));
 				goto accept_cleanup;
 			}
 			os_printf("Added client\nNumber of clients: %d\n", num_clients);
 			active_ptr[num_clients++] = client;
+			if (xSemaphoreGive(client_list_mutex) != pdTRUE) {
+				os_printf("[%s] FATAL: failed to give client_list_mutex \n", __FUNCTION__);
+			}
 			goto accept_end;
 		}
 		accept_cleanup:
 			close(client);
 		accept_end:
-			xSemaphoreGive(client_list_mutex);
 			vTaskDelay(1000 / portTICK_RATE_MS);
 	}
+}
+
+#define HTTP_RESULT_CODE_OK 200
+#define HTTP_ERROR_NOT_FOUND 404
+#define HTTP_ERROR_METHOD_NOT_ALLOWED 405
+#define HTTP_ERROR_BAD_REQUEST 300
+#define HTTP_ERROR_VERSION_NOT_SUPPORTED 505
+
+int parse_http(http_packet_t *packet, http_request_info_t *req_info) {
+	*req_info = (http_request_info_t){};
+	char* line_end = strstr(packet->buf, "\r\n");
+    if (line_end == NULL) {
+        os_printf("Error: Malformed request line (no CRLF).\n");
+		req_info->http_return_code = HTTP_ERROR_BAD_REQUEST;
+        return false;
+    }
+
+    // Calculate length of the request line
+    size_t line_len = line_end - packet->buf;
+
+    // Temporarily null-terminate the request line for parsing
+    *line_end = '\0';
+
+    // --- Parse Method ---
+    char* first_space = strchr(packet->buf, ' ');
+    if (first_space == NULL || first_space >= line_end) {
+        os_printf("Error: Malformed request line (no space after method).\n");
+        *line_end = '\r'; // Restore original character
+		req_info->http_return_code = HTTP_ERROR_BAD_REQUEST;
+        return false;
+    }
+    size_t method_len = first_space - packet->buf;
+    if (method_len >= 8) {
+        os_printf("Error: Method too long.\n");
+        *line_end = '\r'; // Restore
+		req_info->http_return_code = HTTP_ERROR_BAD_REQUEST;
+        return false;
+    }
+    memcpy(req_info->method, packet->buf, method_len);
+    req_info->method[method_len] = '\0';
+
+    // --- Parse Path ---
+    char* path_start = first_space + 1;
+    char* second_space = strchr(path_start, ' ');
+    if (second_space == NULL || second_space >= line_end) {
+        os_printf("Error: Malformed request line (no space after path).\n");
+        *line_end = '\r'; // Restore
+		req_info->http_return_code = HTTP_ERROR_BAD_REQUEST;
+        return false;
+    }
+    size_t path_len = second_space - path_start;
+	if (path_len >= 8) {
+        os_printf("Error: Path too long.\n");
+        *line_end = '\r'; // Restore
+		req_info->http_return_code = HTTP_ERROR_BAD_REQUEST;
+        return false;
+    }
+    memcpy(req_info->path, path_start, path_len);
+    req_info->path[path_len] = '\0';
+
+    // --- Parse Version ---
+	char* version_start = second_space + 1;
+	size_t version_len = line_end - version_start; // Version runs to the end of the line
+	if (version_len >= 10) {
+        os_printf("Error: Version string too long.\n");
+        *line_end = '\r'; // Restore
+		req_info->http_return_code = HTTP_ERROR_BAD_REQUEST;
+        return false;
+    }
+    memcpy(req_info->version, version_start, version_len);
+    req_info->version[version_len] = '\0';
+
+    // Restore the original character at line_end
+    *line_end = '\r';
+
+    os_printf("Parsed Request: Method='%s', Path='%s', Version='%s'\n", req_info->method, req_info->path, req_info->version);
+
+	if (strcmp(req_info->method, "GET")) {
+		os_printf("Cannot handle %s method\n", req_info->method);
+		req_info->http_return_code = HTTP_ERROR_METHOD_NOT_ALLOWED;
+		return false;
+	}
+	if (strcmp(req_info->path, "/")) {
+		os_printf("Cannot handle path %s\n", req_info->path);
+		req_info->http_return_code = HTTP_ERROR_NOT_FOUND;
+		return false;
+	}
+	// Handle only 1.1 / 1.0 requests
+	if (req_info->version[0] != '1' || req_info->version[1] != '.' || (req_info->version[2] != '1' && req_info->version[2] != '0')) {
+		os_printf("Cannot handle HTTP version %s\n", req_info->version);
+		req_info->http_return_code = HTTP_ERROR_VERSION_NOT_SUPPORTED;
+		return false;
+	}
+	req_info->http_return_code = HTTP_RESULT_CODE_OK;
+    return true;
 }
 
 void client_task(void *arg) {
@@ -387,20 +466,24 @@ void client_task(void *arg) {
 		.tv_sec = 0,
 		.tv_usec = 100000,
 	};
+	int parse_http_result = 0;
 
-	while(1) 
-	{
-		os_printf("%s Bytes used: %d\n", __FUNCTION__, uxTaskGetStackHighWaterMark(NULL));
-		os_printf("Heap bytes remaining: %u\n", xPortGetFreeHeapSize());
+	while(1) {
+		os_printf("[%s] Max bytes used: %d\n", __FUNCTION__, uxTaskGetStackHighWaterMark(NULL));
+		os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
+		
 		FD_ZERO(&read_fds);
 		FD_ZERO(&write_fds);
 		FD_ZERO(&except_fds);
 		processed_client_socks_len = 0;
-
+		
         int max_fd = 0; // Find the maximum file descriptor number
 
         // Protect access to the shared list of client sockets
-        xSemaphoreTake(client_list_mutex, portMAX_DELAY); 
+        if (xSemaphoreTake(client_list_mutex, portMAX_DELAY) != pdTRUE) {
+			os_printf("FATAL: client_task failed to take semaphore.\n");
+			while (1) vTaskDelay(1000);
+		}
         // Populate the fd_sets and find max_fd
         for (int i = 0; i < num_clients; ++i) {
             int client_fd = active_ptr[i];
@@ -415,22 +498,33 @@ void client_task(void *arg) {
         }
 
 		if (max_fd == 0 || num_clients == 0) {
-			os_printf("Select task: No active clients, delaying.\n");
-			vTaskDelay(100 / portTICK_RATE_MS); // Delay if no clients to monitor
+			os_printf("[%s]: No active clients, delaying.\n", __FUNCTION__);
+			vTaskDelay(2000 / portTICK_RATE_MS); // Delay if no clients to monitor
+			if (xSemaphoreGive(client_list_mutex) != pdTRUE) {
+				os_printf("[%s]: FATAL: failed to give semaphore.\n", __FUNCTION__);
+				while (1) vTaskDelay(1000);
+			}
 			continue; // Go to next iteration
 		}
 
 		int activity = lwip_select(max_fd + 1, &read_fds, &write_fds, &except_fds, &timeout);
-		int curr_errno = errno;
         if (activity < 0) {
-            os_printf("Select error %d: %s\n", curr_errno, strerror(errno)); // Use appropriate logging
-            vTaskDelay(100 / portTICK_RATE_MS);
+            os_printf("Select error %d: %s\n", errno, strerror(errno)); // Use appropriate logging
+            vTaskDelay(5000 / portTICK_RATE_MS);
+			if (xSemaphoreGive(client_list_mutex) != pdTRUE) {
+				os_printf("FATAL: client_task failed to give client_list_mutex.\n");
+				while (1) vTaskDelay(1000);
+			}
             continue;
         }
 
         if (activity == 0) {
             // Timeout occurred, no activity. Just loop and call select again.
             os_printf("Select timeout, no activity.\n");
+			if (xSemaphoreGive(client_list_mutex) != pdTRUE) {
+				os_printf("FATAL: client_task failed to give client_list_mutex.\n");
+				while (1) vTaskDelay(1000);
+			}
             continue;
         }
 
@@ -446,19 +540,17 @@ void client_task(void *arg) {
 
             // Only check read_fds if the socket didn't err
             if (FD_ISSET(curr_client, &read_fds)) {
+				packet = (http_packet_t){};
 				// Attempt to read data
 				os_printf("Reading from client %d\n", curr_client);
-				char buffer[1024];
-				int bytes_received = recv(curr_client, buffer, sizeof(buffer), 0);
-				int total_bytes_received = 0;
+				char buf[1024];
 				bool header_complete = false;
 
-				while (total_bytes_received < sizeof(buffer) - 1) {
+				while (1) {
+					int bytes_received = recv(curr_client, buf, sizeof(buf), 0);
 					if (bytes_received < 0) {
-						int recv_errno = errno; // Capture errno if possible
-						if (recv_errno != EWOULDBLOCK) {
+						if (errno != EWOULDBLOCK) {
 							// Real error during recv (connection broken)
-							// os_printf("Recv error on client %d: %d (%s). Closing.\n", curr_client, recv_errno, strerror(recv_errno)); // Use logging
 							os_printf("Recv error on client %d. Closing. Return code: %d.\n", curr_client, bytes_received); // If errno broken
 							// --- Close and Cleanup ---
 							close(curr_client);
@@ -472,12 +564,13 @@ void client_task(void *arg) {
 						xSemaphoreTake(accept_semaphore, portMAX_DELAY);
 						goto client_end;
 					} else {
-						total_bytes_received += bytes_received;
-						buffer[total_bytes_received] = '\0';
-						if (strstr(buffer, HEADER_END) != NULL) {
+						if (strstr(buf, HEADER_END) != NULL) {
 							header_complete = true;
 							break; // Header is complete
 						}
+						if (bytes_received >= MAX_PACKET_SIZE) break;
+						strncpy(packet.buf, buf, bytes_received);
+						packet.len += bytes_received;
 						 // --- Data Received! ---
 						 // Process the received data (e.g., parse HTTP request)
 						 // >>> This is where your HTTP Parsing & URL Routing Happens <<<
@@ -488,61 +581,213 @@ void client_task(void *arg) {
 						 // Remember a single recv might not get the whole request.
 					}
 				}
-
 				if (!header_complete) {
 					os_printf("Error: Header not complete or too large for buffer %d.\n", curr_client);
-					goto client_end; // Header too large or missing end marker
+					goto client_add; // Header too large or missing end marker
 				}
-			
-				// --- Parse the Request Line (First Line) ---
-				// Find the end of the first line (\r\n)
-				char* first_line_end = strstr(buffer, "\r\n");
-				if (first_line_end == NULL) {
-					os_printf("Error: Malformed request, no CRLF in first line %d.\n", curr_client);
-					goto client_end;
+				if (!parse_http(&packet, &req_info)) {
+					vTaskDelay(100 / portTICK_RATE_MS);
 				}
-
-				*first_line_end = '\0'; // Null-terminate the first line temporarily
-
-				char method[10]; // Buffer for method (GET, POST, etc.)
-				char path[128];  // Buffer for path (/, /data, etc.)
-
-				char* first_space = strchr(buffer, ' ');
-				if (first_space == NULL) {
-					os_printf("Error: Malformed request line (no space) %d.\n", curr_client);
-					goto client_end;
-				}
-				*first_space = '\0'; // Null-terminate method
-				os_strncpy(method, buffer, sizeof(method) - 1);
-				method[sizeof(method) - 1] = '\0'; // Ensure null termination
-
-				char* second_space = strchr(first_space + 1, ' ');
-				if (second_space == NULL) {
-					os_printf("Error: Malformed request line (no second space) %d.\n", curr_client);
-					goto client_end;
-				}
-				*second_space = '\0'; // Null-terminate path
-				os_strncpy(path, first_space + 1, sizeof(path) - 1);
-				path[sizeof(path) - 1] = '\0';
             }
 
             if (FD_ISSET(curr_client, &write_fds)) {
-				// --- Handle Outgoing Data ---
-				// You can now send data to curr_client without blocking
-				// os_printf("Client socket %d ready for sending.\n", curr_client);
-				// Check if you have pending data to send for this client
-				// If yes, call send() (or write())
+				send_data(curr_client, &req_info);
 			}
-			processed_ptr[processed_client_socks_len++] = curr_client;
+			client_add:
+				processed_ptr[processed_client_socks_len++] = curr_client;
 
             // If any error occurred, skip copying the socket before switching the buffer.
 			client_end:
+				continue;
         } // End for loop processing revents
 		int *temp = processed_ptr;
 		num_clients = processed_client_socks_len;
 		processed_ptr = active_ptr;
 		active_ptr = temp;
 
-		xSemaphoreGive(client_list_mutex);
+		if (xSemaphoreGive(client_list_mutex) != pdTRUE) {
+			os_printf("FATAL: client_task failed to give client_list_mutex.\n");
+			while (1) vTaskDelay(1000);
+		}
 	}
+}
+
+int32_t send_data(int client_socket, http_request_info_t *req_info) {
+	int count = get_count();
+	char response[1024];
+	char body[512]; // Make sure this is large enough for your body
+	int total_len = 0;
+	switch (req_info->http_return_code) {
+		case HTTP_RESULT_CODE_OK: {
+			int body_len = snprintf(body, sizeof(body),
+								"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>Exercise Result</title></head><body><h1>Results</h1><p>You did %d push-up(s). Congratulations!!</p></body></html>",
+								count);
+	
+			if (body_len < 0 || body_len >= sizeof(body)) {
+				// Handle body formatting error (e.g., buffer too small)
+				os_printf("Error: Could not format response body or buffer too small.\n");
+				return -1; // Indicate error
+			}
+			int header_len = snprintf(response, sizeof(response),
+								"HTTP/1.1 200 OK\r\n"
+								"Content-Type: text/html\r\n"
+								"Content-Length: %d\r\n" // Use the calculated body_len
+								"Connection: keep-alive\r\n"
+								"\r\n",
+								body_len);
+			if (header_len < 0 || header_len >= sizeof(response)) {
+				// Handle header formatting error
+				os_printf("Error: Could not format response header or buffer too small.\n");
+				return -1;
+			}
+			// Append the body, checking bounds
+			if (header_len + body_len >= sizeof(response)) {
+				os_printf("Error: Combined header and body too large for response buffer.\n");
+				return -1;
+			}
+			memcpy(response + header_len, body, body_len); // Use memcpy since body is already formatted
+			response[total_len] = '\0';
+			total_len = header_len + body_len;
+		} break;
+		case HTTP_ERROR_METHOD_NOT_ALLOWED: {
+			int body_len = snprintf(body, sizeof(body),
+								"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>405 Method Not Allowed</title></head><body>Requested Method %s Not Allowed</body></html>", 
+								req_info->method);
+			if (body_len < 0 || body_len >= sizeof(body)) {
+				// Handle body formatting error (e.g., buffer too small)
+				os_printf("Error: Could not format response body or buffer too small.\n");
+				return -1; // Indicate error
+			}
+			int header_len = snprintf(response, sizeof(response),
+								"HTTP/1.1 405 Method Not Allowed\r\n"
+								"Content-Type: text/html\r\n"
+								"Content-Length: %d\r\n" // Use the calculated body_len
+								"Connection: keep-alive\r\n"
+								"\r\n",
+								body_len);
+			if (header_len < 0 || header_len >= sizeof(response)) {
+				// Handle header formatting error
+				os_printf("Error: Could not format response header or buffer too small.\n");
+				return -1;
+			}
+			// Append the body, checking bounds
+			if (header_len + body_len >= sizeof(response)) {
+				os_printf("Error: Combined header and body too large for response buffer.\n");
+				return -1;
+			}
+			memcpy(response + header_len, body, body_len); // Use memcpy since body is already formatted
+			response[total_len] = '\0';
+			total_len = header_len + body_len;
+		} break;
+		case HTTP_ERROR_VERSION_NOT_SUPPORTED: {
+			int body_len = snprintf(body, sizeof(body),
+								"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>505 Version Not Supported</title></head><body>HTTP Version %s Not Supported</body></html>", 
+								req_info->version);
+			if (body_len < 0 || body_len >= sizeof(body)) {
+				// Handle body formatting error (e.g., buffer too small)
+				os_printf("Error: Could not format response body or buffer too small.\n");
+				return -1; // Indicate error
+			}
+			int header_len = snprintf(response, sizeof(response),
+								"HTTP/1.1 505 Version Not Supported\r\n"
+								"Content-Type: text/html\r\n"
+								"Content-Length: %d\r\n" // Use the calculated body_len
+								"Connection: keep-alive\r\n"
+								"\r\n",
+								body_len);
+			if (header_len < 0 || header_len >= sizeof(response)) {
+				// Handle header formatting error
+				os_printf("Error: Could not format response header or buffer too small.\n");
+				return -1;
+			}
+			// Append the body, checking bounds
+			if (header_len + body_len >= sizeof(response)) {
+				os_printf("Error: Combined header and body too large for response buffer.\n");
+				return -1;
+			}
+			memcpy(response + header_len, body, body_len); // Use memcpy since body is already formatted
+			response[total_len] = '\0';
+			total_len = header_len + body_len;
+		} break;
+		case HTTP_ERROR_NOT_FOUND: {
+			int body_len = snprintf(body, sizeof(body),
+								"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>404 Not Found</title></head><body>Requested URL %s Not Found</body></html>", 
+								req_info->path);
+			if (body_len < 0 || body_len >= sizeof(body)) {
+				// Handle body formatting error (e.g., buffer too small)
+				os_printf("Error: Could not format response body or buffer too small.\n");
+				return -1; // Indicate error
+			}
+			int header_len = snprintf(response, sizeof(response),
+								"HTTP/1.1 404 Not Found\r\n"
+								"Content-Type: text/html\r\n"
+								"Content-Length: %d\r\n" // Use the calculated body_len
+								"Connection: keep-alive\r\n"
+								"\r\n",
+								body_len);
+			if (header_len < 0 || header_len >= sizeof(response)) {
+				// Handle header formatting error
+				os_printf("Error: Could not format response header or buffer too small.\n");
+				return -1;
+			}
+			// Append the body, checking bounds
+			if (header_len + body_len >= sizeof(response)) {
+				os_printf("Error: Combined header and body too large for response buffer.\n");
+				return -1;
+			}
+			memcpy(response + header_len, body, body_len); // Use memcpy since body is already formatted
+			response[total_len] = '\0';
+			total_len = header_len + body_len;
+		} break;
+		case HTTP_ERROR_BAD_REQUEST: {
+			int body_len = snprintf(body, sizeof(body),
+								"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>300 Bad Request</title></head><body>Request cannot be handled</body></html>");
+			if (body_len < 0 || body_len >= sizeof(body)) {
+				// Handle body formatting error (e.g., buffer too small)
+				os_printf("Error: Could not format response body or buffer too small.\n");
+				return -1; // Indicate error
+			}
+			int header_len = snprintf(response, sizeof(response),
+								"HTTP/1.1 300 Bad Request\r\n"
+								"Content-Type: text/html\r\n"
+								"Content-Length: %d\r\n" // Use the calculated body_len
+								"Connection: keep-alive\r\n"
+								"\r\n",
+								body_len);
+			if (header_len < 0 || header_len >= sizeof(response)) {
+				// Handle header formatting error
+				os_printf("Error: Could not format response header or buffer too small.\n");
+				return -1;
+			}
+			// Append the body, checking bounds
+			if (header_len + body_len >= sizeof(response)) {
+				os_printf("Error: Combined header and body too large for response buffer.\n");
+				return -1;
+			}
+			memcpy(response + header_len, body, body_len); // Use memcpy since body is already formatted
+			response[total_len] = '\0';
+			total_len = header_len + body_len;
+		} break;
+	}
+	int bytes_sent = 0;
+	while (bytes_sent < total_len) {
+		int res = send(client_socket, response + bytes_sent, total_len - bytes_sent, 0);
+		if (res < 0) {
+			if (errno == EWOULDBLOCK || errno == EAGAIN) {
+				os_printf("Client %d: send would block. Will retry later.\n", client_socket);
+				// You might need state management here to remember how much was sent
+				// and retry when FD_ISSET(write_fds) is true again.
+				// For simplicity now, we return an error indicating incomplete send.
+				return -EWOULDBLOCK; // Indicate incomplete send
+			} else {
+				os_printf("Error sending data to client %d, errno %d: %s\n", client_socket, errno, strerror(errno));
+				return -errno; // Return negative error code
+			}
+		} else {
+			bytes_sent += res;
+			os_printf("Client %d: Sent %d bytes (total %d/%d)\n", client_socket, res, bytes_sent, total_len);
+		}
+	}
+	os_printf("Client %d: Successfully sent complete response.\n", client_socket);
+	return bytes_sent; 
 }

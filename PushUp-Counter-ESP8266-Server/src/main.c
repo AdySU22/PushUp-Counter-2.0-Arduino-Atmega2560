@@ -7,6 +7,7 @@
 #include <freertos/semphr.h> 
 
 #include "client.h"
+#include "spi.h"
 
 xSemaphoreHandle scan_semaphore = NULL; 
 xSemaphoreHandle accept_semaphore = NULL;
@@ -46,50 +47,79 @@ uint32_t user_rf_cal_sector_set(void) {
 }
 
 void wifi_task(void *arg) {
-	os_printf("Heap bytes remaining: %u\n", xPortGetFreeHeapSize());
-	os_printf("Wi-Fi init returned with code %d\n", init_server());
-	os_printf("Heap bytes remaining: %u\n", xPortGetFreeHeapSize());
-	portBASE_TYPE res = xTaskCreate(&scan_task, "wifi_scan_task", 256, NULL, 0, &wifi_scan_task_handle);
+	os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
+	portBASE_TYPE res = init_server(); 
+	os_printf("Wi-Fi init returned with code %d\n", res);
+	if (res) {
+		while (1) vTaskDelay(1);
+	}
+	os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
+	// res = xTaskCreate(&scan_task, "wifi_scan_task", 256, NULL, 0, &wifi_scan_task_handle);
+	// if (res != pdPASS) {
+	// 	os_printf("Failed to create %s (0x%X).\n", "wifi_scan_task", res);
+	// 	while (1) {
+	// 		vTaskDelay(1);
+	// 	};
+	// }
+
+	os_printf("Created %s\n", "wifi_scan_task");
+	os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
+	res = xTaskCreate(&accept_task, "wifi_accept_task", 512, NULL, 0, &wifi_accept_task_handle);
 	if (res != pdPASS) {
-		os_printf("Failed to create wifi_scan_task (0x%X).\n", res);
+		os_printf("Failed to create %s (0x%X).\n", "wifi_accept_task", res);
 		while (1) {
 			vTaskDelay(1);
 		};
 	}
-	os_printf("Created wifi_scan_task\n");
-	res = xTaskCreate(&accept_task, "wifi_accept_task", 256, NULL, 0, &wifi_accept_task_handle);
+	
+	os_printf("Created %s\n", "wifi_accept_task");
+	os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
+
+	res = xTaskCreate(&client_task, "wifi_client_task", 1024, NULL, 1, &wifi_client_task_handle);
 	if (res != pdPASS) {
-		os_printf("Failed to create wifi_accept_task (0x%X).\n", res);
+		os_printf("Failed to create %s (0x%X).\n", "wifi_client_task", res);
 		while (1) {
 			vTaskDelay(1);
 		};
 	}
-	os_printf("Created wifi_accept_task\n");
-	res = xTaskCreate(&client_task, "wifi_client_task", 2048, NULL, 1, &wifi_client_task_handle);
-	if (res != pdPASS) {
-		os_printf("Failed to create wifi_client_task (0x%X).\n", res);
-		while (1) {
-			vTaskDelay(1);
-		};
-	}
-	os_printf("Created wifi_client_task\n");
-	os_printf("Heap bytes remaining: %u\n", xPortGetFreeHeapSize());
+
+	os_printf("Created %s\n", "wifi_client_task");
+	os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
 	while (1) {
 		os_printf("%s Bytes used: %d\n", __FUNCTION__, uxTaskGetStackHighWaterMark(NULL));
-		os_printf("Heap bytes remaining: %u\n", xPortGetFreeHeapSize());
-		int rssi = wifi_station_get_rssi();
-		if (rssi != 31) {
-			selected_ap->rssi = rssi;
+		os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
+		// os_printf("Current wifi station rssi: %d\n", selected_ap->rssi); 
+		os_printf("Connection status: ");
+		switch (wifi_station_get_connect_status()) {
+			case STATION_IDLE: {
+				os_printf("Idle\n");
+			} break;
+			case STATION_CONNECTING: {
+				os_printf("Connecting\n");
+			} break;
+			case STATION_WRONG_PASSWORD: {
+				os_printf("Wrong password\n");
+			} break;
+			case STATION_NO_AP_FOUND: {
+				os_printf("No AP found\n");
+				wifi_station_connect();
+			} break;
+			case STATION_CONNECT_FAIL: {
+				os_printf("Failed to connect\n");
+				// if (selected_ap->rssi < -35 || selected_ap->rssi == 31) {
+				// 	xSemaphoreGive(scan_semaphore);
+				// 	vTaskResume(wifi_scan_task_handle);
+				// }
+			} break;
+			case STATION_GOT_IP: {
+				os_printf("Got IP\n");
+				int rssi = wifi_station_get_rssi();
+				os_printf("rssi: %d\n", rssi);
+				if (rssi != 31) {
+					selected_ap->rssi = rssi;
+				}
+			} break;
 		}
-		os_printf("Current wifi station rssi: %d\n", selected_ap->rssi);
-		if (selected_ap->rssi < -35) {
-			xSemaphoreGive(scan_semaphore);
-			vTaskResume(wifi_scan_task_handle);
-		} 
-		if (num_clients >= MAX_CLIENT_NUM) {
-			xSemaphoreGive(accept_semaphore);
-		}
-
 		print_station_clients();
 		
 		vTaskDelay(1000 / portTICK_RATE_MS);
@@ -104,32 +134,56 @@ void user_init(void) {
 	if (!scan_semaphore) {
 		os_printf("Failed to create scan_semaphore.\n");
 		while (1) {
-			vTaskDelay(1);
+			gpio_output_conf(0x4, 0, 0xFFFF, 0);
+			vTaskDelay(250/portTICK_RATE_MS);
+			gpio_output_conf(0, 0x4, 0xFFFF, 0);
+			vTaskDelay(250/portTICK_RATE_MS);
 		};
 	}
-	accept_semaphore = xSemaphoreCreateCounting(MAX_CLIENT_NUM, 0); 
+	accept_semaphore = xSemaphoreCreateCounting(MAX_CLIENT_NUM, MAX_CLIENT_NUM); 
 	if (!accept_semaphore) { 
 		os_printf("Failed to create accept_semaphore.\n");
 		while (1) {
-			vTaskDelay(1);
+			gpio_output_conf(0x4, 0, 0xFFFF, 0);
+			vTaskDelay(250/portTICK_RATE_MS);
+			gpio_output_conf(0, 0x4, 0xFFFF, 0);
+			vTaskDelay(250/portTICK_RATE_MS);
 		};
 	}
 	client_list_mutex = xSemaphoreCreateMutex(); 
 	if (!client_list_mutex) { 
 		os_printf("Failed to create client_list_mutex.\n");
 		while (1) {
-			vTaskDelay(1);
+			gpio_output_conf(0x4, 0, 0xFFFF, 0);
+			vTaskDelay(250/portTICK_RATE_MS);
+			gpio_output_conf(0, 0x4, 0xFFFF, 0);
+			vTaskDelay(250/portTICK_RATE_MS);
 		};
 	}
-
+	
 	if (xTaskCreate(&wifi_task, "wifi_task", 512, NULL, 0, &wifi_task_handle) != pdPASS) {
 		os_printf("Failed to create wifi_task.\n");
 		while (1) {
-			vTaskDelay(1);
+			gpio_output_conf(0x4, 0, 0xFFFF, 0);
+			vTaskDelay(250/portTICK_RATE_MS);
+			gpio_output_conf(0, 0x4, 0xFFFF, 0);
+			vTaskDelay(250/portTICK_RATE_MS);
 		};
 	}
-	os_printf("Heap bytes remaining: %u\n", xPortGetFreeHeapSize());
-	os_printf("Created wifi_task.\n");
+	os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
+	os_printf("[%s] Created wifi_task.\n", __FUNCTION__);
+	init_spi();
+	if (xTaskCreate(&spi_task, "spi_task", 256, NULL, 0, NULL) != pdPASS) {
+		os_printf("Failed to create spi_task.\n");
+		while (1) {
+			gpio_output_conf(0x4, 0, 0xFFFF, 0);
+			vTaskDelay(250/portTICK_RATE_MS);
+			gpio_output_conf(0, 0x4, 0xFFFF, 0);
+			vTaskDelay(250/portTICK_RATE_MS);
+		};
+	}
+
+	gpio_output_conf(0, 0x4, 0xFFFF, 0);
 }
 
 
@@ -170,14 +224,13 @@ void user_init(void) {
 
 // void task_blink(void* ignore)
 // {
-//     gpio16_output_conf();
+//     gpio_output_conf(0, 0, 0xFFFF, 0);
 //     while(true) {
-//     	gpio16_output_set(0);
+//     	gpio_output_conf(0x4, 0, 0xFFFF, 0);
 //         vTaskDelay(1000/portTICK_RATE_MS);
-//     	gpio16_output_set(1);
+//     	gpio_output_conf(0, 0x4, 0xFFFF, 0);
 //         vTaskDelay(1000/portTICK_RATE_MS);
 //     }
-
 //     vTaskDelete(NULL);
 // }
 
