@@ -149,7 +149,7 @@ void print_station_clients(void) {
 	while (curr) {
 		os_printf("BSSID / MAC: %d:%d:%d:%d:%d:%d, \nIP: %d.%d.%d.%d\n", curr->bssid[0], 
 			curr->bssid[1], curr->bssid[2], curr->bssid[3], curr->bssid[4], curr->bssid[5],
-			((curr->ip.addr >> 24) & 0xFF), ((curr->ip.addr >> 16) & 0xFF), ((curr->ip.addr >> 8) & 0xFF), (curr->ip.addr & 0xFF));
+			((curr->ip.addr) & 0xFF), ((curr->ip.addr >> 8) & 0xFF), ((curr->ip.addr >> 16) & 0xFF), ((curr->ip.addr >> 24) & 0xFF));
 		curr = curr->next.stqe_next;
 	}
 	wifi_softap_free_station_info();
@@ -214,7 +214,7 @@ int32_t init_sockets(void) {
 		.sin_addr = {
 			.s_addr = INADDR_ANY
 		},
-		.sin_port = htons(0)
+		.sin_port = htons(80)
 	};
 
 	res = bind(server_sock, (struct sockaddr*)&address, sizeof(struct sockaddr));
@@ -239,10 +239,10 @@ int32_t init_sockets(void) {
 		bound_address.sin_addr.s_addr & 0xFF
 	};
 	if (res < 0) {
-		os_printf("Error listening to %d.%d.%d.%d:%d: %s\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3], ntohs(bound_address.sin_port), strerror(errno));
+		os_printf("Error listening to %d.%d.%d.%d:%d: %s\n", ip_address[3], ip_address[2], ip_address[1], ip_address[0], ntohs(bound_address.sin_port), strerror(errno));
 		return errno;
 	}
-	os_printf("Server listening at %d.%d.%d.%d:%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3], ntohs(bound_address.sin_port));
+	os_printf("Server listening at %d.%d.%d.%d:%d\n", ip_address[3], ip_address[2], ip_address[1], ip_address[0], ntohs(bound_address.sin_port));
 	return 0;
 }
 
