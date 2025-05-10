@@ -6,7 +6,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
-// #include <errno.h>
 
 #include <esp_softap.h>
 #include <esp_sta.h>
@@ -24,14 +23,12 @@
 #define AP_PASS "pushup-bar"
 #define STA_SSID_DEFAULT "Redmi Note 13 5G"
 #define STA_SSID_ALTERNATIVE "LAPTOP-41BJ3APC 3889"
-// #define STA_SSID STA_SSID_ALTERNATIVE
 #define STA_SSID STA_SSID_DEFAULT
+
 #define STA_PASS_DEFAULT "7zpn48butmgrmrd"
 #define STA_PASS_ALTERNATIVE "12345678"
-// #define STA_PASS STA_PASS_ALTERNATIVE
 #define STA_PASS STA_PASS_DEFAULT
-// #define STA_BSSID_DEFAULT {0x14, 0x99, 0x3E, 0xA5, 0xB1, 0x4B}
-// #define STA_BSSID STA_BSSID_DEFAULT
+
 #define AP_SSID_LENGTH ((sizeof(AP_SSID)/sizeof(AP_SSID[0])) - 1)
 #define AP_PASS_LENGTH ((sizeof(AP_PASS)/sizeof(AP_PASS[0])) - 1)
 #define STA_SSID_LENGTH ((sizeof(STA_SSID)/sizeof(STA_SSID[0])) - 1)

@@ -85,9 +85,10 @@ void wifi_task(void *arg) {
 
 	os_printf("Created %s\n", "wifi_client_task");
 	os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
-	while (1) {
+	while (1) {		
 		os_printf("%s Bytes used: %d\n", __FUNCTION__, uxTaskGetStackHighWaterMark(NULL));
 		os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
+		os_printf("[%s] num clients: %d\n", __FUNCTION__, num_clients);
 		// os_printf("Current wifi station rssi: %d\n", selected_ap->rssi); 
 		os_printf("Connection status: ");
 		switch (wifi_station_get_connect_status()) {

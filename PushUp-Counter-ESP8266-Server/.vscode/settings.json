@@ -106,6 +106,8 @@
 	"opt.h": "c",
 	"c_types.h": "c",
 	"list.h": "c",
-	"debug.h": "c"
+	"debug.h": "c",
+	"espconn.h": "c",
+	"wlan_lwip_if.h": "c"
 }
 }
