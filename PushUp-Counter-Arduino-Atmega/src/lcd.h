@@ -1,21 +1,25 @@
-// Author:         
-// Net ID:         
-// Date:           
-// Assignment:     Lab 3
-//----------------------------------------------------------------------//
+#ifndef LCD_H__ 
+#define LCD_H__
 
-#ifndef LCD_H
-#define LCD_H
+#include "common.h"
+#include "i2c.h"
+#include "timer.h"
+#include <avr/interrupt.h>
 
-#include <avr/io.h>
+#define LCD_REGISTER_SELECT_BIT_MASK 0x1
+#define LCD_WRITE_READ_BIT_MASK 0x2
+#define LCD_ENABLE_BIT_MASK 0x4
+#define LCD_BACKLIGHT_BIT_MASK 0x8
 
-void initLCD();
-void fourBitCommandWithDelay(unsigned char data, unsigned int delay);
-void eightBitCommandWithDelay(unsigned char command, unsigned int delay);
-void writeCharacter(unsigned char character);
-void writeString(const char *string);
-void moveCursor(unsigned char x, unsigned char y);
-void initLCDPins();
-void initLCDProcedure();
+void init_lcd(void);
+uint8_t send_bits(uint8_t data, uint8_t flags);
+uint8_t move_cursor(bool y, uint8_t x);
+uint8_t write_char(uint8_t character);
+uint8_t send_command(uint8_t command);
+uint8_t write_str(const char* str);
+uint8_t clear_screen(void);
+uint8_t configure_display(const bool display_on, const bool cursor_on, const bool blink_on);
+
+extern bool lcd_initialized;
 
 #endif
