@@ -21,14 +21,14 @@ void set_use_open_wifi(bool use) {
 }
 
 void scan_callback(void *arg, STATUS status) {
-	os_printf("Scan status: ");
+	os_printf("[%s] Scan status: ", __FUNCTION__);
 	switch (status) {
 		case OK: {
 			os_printf("OK\n");
 			bss_info_t *bss_info = (bss_info_t*)arg;
 			while (bss_info) {
-				os_printf("BSSID / MAC: %d:%d:%d:%d:%d:%d\nSSID: %s\nChannel: %d\nRSSI: %d\nAuth Mode: ", 
-					bss_info->bssid[0], bss_info->bssid[1], bss_info->bssid[2], bss_info->bssid[3], bss_info->bssid[4], bss_info->bssid[5],
+				os_printf("[%s] BSSID / MAC: %d:%d:%d:%d:%d:%d\nSSID: %s\nChannel: %d\nRSSI: %d\nAuth Mode: ", 
+					__FUNCTION__, bss_info->bssid[0], bss_info->bssid[1], bss_info->bssid[2], bss_info->bssid[3], bss_info->bssid[4], bss_info->bssid[5],
 					bss_info->ssid, bss_info->channel, bss_info->rssi
 				);
 				switch (bss_info->authmode) {
@@ -55,21 +55,21 @@ void scan_callback(void *arg, STATUS status) {
 					default: 
 						break;
 				}
-				os_printf("Hidden: %s\nFrequency Offset: %d\nFrequency Calibration: %d\n\n", bss_info->is_hidden ? "True" : "False", bss_info->freq_offset, bss_info->freqcal_val);
+				os_printf("[%s] Hidden: %s\nFrequency Offset: %d\nFrequency Calibration: %d\n\n", __FUNCTION__, bss_info->is_hidden ? "True" : "False", bss_info->freq_offset, bss_info->freqcal_val);
 				bss_info = bss_info->next.stqe_next;
 			}
 		} break;
 		case PENDING: {
-			os_printf("Pending\n");
+			os_printf("[%s] Pending\n", __FUNCTION__);
 		}	break;
 		case FAIL: {
-			os_printf("Failed\n");
+			os_printf("[%s] Failed\n", __FUNCTION__);
 		} break;
 		case BUSY: {
-			os_printf("Busy\n");
+			os_printf("[%s] Busy\n", __FUNCTION__);
 		} break;
 		case CANCEL: {
-			os_printf("Cancelled\n");
+			os_printf("[%s] Cancelled\n", __FUNCTION__);
 		} break;
 		default:
 			break;
@@ -97,8 +97,8 @@ int32_t init_server(void) {
 	};
 	wifi_station_scan(&scan_conf, scan_callback);
 	dchp_status_t dhcp = wifi_softap_dhcps_status();
-	os_printf("dhcp status: %s\n", dhcp == DHCP_STARTED ? "Started" : "Stopped");
-	os_printf("WiFi AP SSID: %s\nWifi Password: %s\n", AP_SSID, AP_PASS);
+	os_printf("[%s] dhcp status: %s\n", __FUNCTION__, dhcp == DHCP_STARTED ? "Started" : "Stopped");
+	os_printf("[%s] WiFi AP SSID: %s\nWifi Password: %s\n", __FUNCTION__, AP_SSID, AP_PASS);
 	sta_config_t sta_conf = {};
 	memcpy(sta_conf.password, STA_PASS, strlen(STA_PASS));
 	memcpy(sta_conf.ssid, STA_SSID, strlen(STA_SSID));
@@ -109,44 +109,44 @@ int32_t init_server(void) {
 	if (!wifi_station_set_config(&sta_conf)) {
 		return 4;
 	}
-	os_printf("Connecting to %s\n", STA_SSID);
+	os_printf("[%s] Connecting to %s\n", __FUNCTION__, STA_SSID);
 	if (!wifi_station_connect()) { 
-		os_printf("Failed to initiate station connection!\n"); 
+		os_printf("[%s] Failed to initiate station connection!\n", __FUNCTION__); 
 		return 5;
 	}
 	switch (wifi_station_get_connect_status()) {
 		case STATION_IDLE: {
-			os_printf("Idle\n");
+			os_printf("[%s] Idle\n", __FUNCTION__);
 		} break;
 		case STATION_CONNECTING: {
-			os_printf("Connecting\n");
+			os_printf("[%s] Connecting\n", __FUNCTION__);
 		} break;
 		case STATION_WRONG_PASSWORD: {
-			os_printf("Wrong password\n");
+			os_printf("[%s] Wrong password\n", __FUNCTION__);
 		} break;
 		case STATION_NO_AP_FOUND: {
-			os_printf("No AP found\n");
+			os_printf("[%s] No AP found\n", __FUNCTION__);
 		} break;
 		case STATION_CONNECT_FAIL: {
-			os_printf("Failed to connect\n");
+			os_printf("[%s] Failed to connect\n", __FUNCTION__);
 		} break;
 		case STATION_GOT_IP: {
-			os_printf("Got IP\n");
+			os_printf("[%s] Got IP\n", __FUNCTION__);
 		} break;
 	}
 	return init_sockets();
 }
 
 void print_station_clients(void) {
-	os_printf("Current clients:\n");
+	os_printf("[%s] Current clients:\n", __FUNCTION__);
 	sta_info_t *sta_info =  wifi_softap_get_station_info();
 	if (!sta_info) {
-		os_printf("No clients.\n"); 
+		os_printf("[%s] No clients.\n", __FUNCTION__); 
 		return;
 	}
 	sta_info_t *curr = sta_info;
 	while (curr) {
-		os_printf("BSSID / MAC: %d:%d:%d:%d:%d:%d, \nIP: %d.%d.%d.%d\n", curr->bssid[0], 
+		os_printf("[%s] BSSID / MAC: %d:%d:%d:%d:%d:%d, \nIP: %d.%d.%d.%d\n", __FUNCTION__, curr->bssid[0], 
 			curr->bssid[1], curr->bssid[2], curr->bssid[3], curr->bssid[4], curr->bssid[5],
 			((curr->ip.addr) & 0xFF), ((curr->ip.addr >> 8) & 0xFF), ((curr->ip.addr >> 16) & 0xFF), ((curr->ip.addr >> 24) & 0xFF));
 		curr = curr->next.stqe_next;
@@ -158,23 +158,23 @@ void print_station_clients(void) {
 int32_t init_sockets(void) {
 	int res = 0;
 	int option = 1;
-	os_printf("errno: %p\n", errno);
+	os_printf("[%s] errno: %p\n", __FUNCTION__, errno);
 	server_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (server_sock < 0) {
-		printf("Error creating server socket: %s\n", strerror(errno));
+		printf("Error creating server socket: %s\n", __FUNCTION__, strerror(errno));
 		return errno;	
 	}
 	
 	res = setsockopt(server_sock, SOL_SOCKET, SO_KEEPALIVE, &option, sizeof(option));
 	if (res < 0) {
-		os_printf("Error setting SO_KEEPALIVE option for server socket: %s\n", strerror(errno));
+		os_printf("[%s] Error setting SO_KEEPALIVE option for server socket: %s\n", __FUNCTION__, strerror(errno));
 		return errno;
 	}
 	
 	int keep_idle = 30; // Time in seconds until the first probe on an idle connection
 	res = setsockopt(server_sock, IPPROTO_TCP, TCP_KEEPIDLE, &keep_idle, sizeof(keep_idle));
 	if (res < 0) {
-		os_printf("Error setting TCP_KEEPIDLE option for server socket: %s\n", strerror(errno));
+		os_printf("[%s] Error setting TCP_KEEPIDLE option for server socket: %s\n", __FUNCTION__, strerror(errno));
 		return errno;
 	} 
 	
@@ -182,7 +182,7 @@ int32_t init_sockets(void) {
 	int keep_intvl = 5; // Time in seconds between subsequent probes
 	res = setsockopt(server_sock, IPPROTO_TCP, TCP_KEEPINTVL, &keep_intvl, sizeof(keep_intvl));
 	if (res < 0) {
-		os_printf("Error setting TCP_KEEPINTVL option for server socket: %s\n", strerror(errno));
+		os_printf("[%s] Error setting TCP_KEEPINTVL option for server socket: %s\n", __FUNCTION__, strerror(errno));
 		return errno;
 	}
 	
@@ -190,20 +190,20 @@ int32_t init_sockets(void) {
 	int keep_cnt = 3; // Number of probes before connection is considered dead
 	res = setsockopt(server_sock, IPPROTO_TCP, TCP_KEEPCNT, &keep_cnt, sizeof(keep_cnt));
 	if (res < 0) {
-		os_printf("Error setting TCP_KEEPCNT option for server socket: %s\n", strerror(errno));
+		os_printf("[%s] Error setting TCP_KEEPCNT option for server socket: %s\n", __FUNCTION__, strerror(errno));
 		return errno;
 	}
 	
 	int flags = fcntl(server_sock, F_GETFL, 0);
 	if (flags < 0) {
-		os_printf("Error getting socket flags: %s\n", strerror(errno));
+		os_printf("[%s] Error getting socket flags: %s\n", __FUNCTION__, strerror(errno));
 		return errno;
 	}
 	
 	// Set non-blocking flag
 	flags |= O_NONBLOCK; 
 	if (fcntl(server_sock, F_SETFL, flags) < 0) {
-		os_printf("Error setting socket flags: %s\n", strerror(errno));
+		os_printf("[%s] Error setting socket flags: %s\n", __FUNCTION__, strerror(errno));
 		return errno;
 	}
 	
@@ -218,7 +218,7 @@ int32_t init_sockets(void) {
 
 	res = bind(server_sock, (struct sockaddr*)&address, sizeof(struct sockaddr));
 	if (res < 0) {
-		os_printf("Error listening to %d: %s\n", 0, strerror(errno));
+		os_printf("[%s] Error listening to %d: %s\n", __FUNCTION__, 0, strerror(errno));
 		return errno;
 	}
 
@@ -226,7 +226,7 @@ int32_t init_sockets(void) {
     socklen_t bound_address_len = sizeof(bound_address);
 	res = lwip_getsockname(server_sock, (struct sockaddr *)&bound_address, &bound_address_len);
 	if (res < 0) {
-		os_printf("Failed to get server's socket address: %s\n", strerror(errno));
+		os_printf("[%s] Failed to get server's socket address: %s\n", __FUNCTION__, strerror(errno));
 		return errno;
 	}
 
@@ -238,24 +238,23 @@ int32_t init_sockets(void) {
 		bound_address.sin_addr.s_addr & 0xFF
 	};
 	if (res < 0) {
-		os_printf("Error listening to %d.%d.%d.%d:%d: %s\n", ip_address[3], ip_address[2], ip_address[1], ip_address[0], ntohs(bound_address.sin_port), strerror(errno));
+		os_printf("[%s] Error listening to %d.%d.%d.%d:%d: %s\n", __FUNCTION__, ip_address[3], ip_address[2], ip_address[1], ip_address[0], ntohs(bound_address.sin_port), strerror(errno));
 		return errno;
 	}
-	os_printf("Server listening at %d.%d.%d.%d:%d\n", ip_address[3], ip_address[2], ip_address[1], ip_address[0], ntohs(bound_address.sin_port));
+	os_printf("[%s] Server listening at %d.%d.%d.%d:%d\n", __FUNCTION__, ip_address[3], ip_address[2], ip_address[1], ip_address[0], ntohs(bound_address.sin_port));
 	return 0;
 }
 
 void scan_task(void *arg) {
 	while (1) {
 		if (xSemaphoreTake(scan_semaphore, portMAX_DELAY) != pdTRUE) {
-			// This should not fail with portMAX_DELAY unless scheduler is stopped or heap corruption
-			os_printf("FATAL: scan_task failed to take semaphore.\n");
+			os_printf("[%s] %d FATAL: Failed to take scan_semaphore.\n", __FUNCTION__, __LINE__);
 			while(1) vTaskDelay(1000);
 		}
 		os_printf("[%s] Max bytes used: %d\n", __FUNCTION__, uxTaskGetStackHighWaterMark(NULL));
 		os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
-		os_printf("Connected to %s\n", selected_ap->rssi != 31 ? (char*)selected_ap->sta_conf.ssid : "None");
-		os_printf("Connection Status: ");
+		os_printf("[%s] Connected to %s\n", __FUNCTION__, selected_ap->rssi != 31 ? (char*)selected_ap->sta_conf.ssid : "None");
+		os_printf("[%s] Connection Status: ", __FUNCTION__);
 		switch (wifi_station_get_connect_status()) {
 			case STATION_IDLE: {
 				os_printf("Idle\n");
@@ -289,7 +288,10 @@ void scan_task(void *arg) {
 
 void accept_task(void *arg) {
 	while (1) {
-		xSemaphoreTake(accept_semaphore, portMAX_DELAY);
+		if (xSemaphoreTake(accept_semaphore, portMAX_DELAY) != pdTRUE) {
+			os_printf("[%s] %d FATAL: Failed to take accept_semaphore.\n", __FUNCTION__, __LINE__);
+			while (1) vTaskDelay(1000);
+		}
 		os_printf("[%s] Max bytes used: %d\n", __FUNCTION__, uxTaskGetStackHighWaterMark(NULL));
 		os_printf("[%s] Heap bytes remaining: %u\n", __FUNCTION__, xPortGetFreeHeapSize());
 		
@@ -312,29 +314,32 @@ void accept_task(void *arg) {
 		}
 		if (client < 0) {
 			if (errno != EWOULDBLOCK) {
-				os_printf("Failed to accept client due to %d: %s\n", errno, strerror(errno));
+				os_printf("[%s] Failed to accept client due to %d: %s\n", __FUNCTION__, errno, strerror(errno));
 			} else {
-				os_printf("Call to accept() would block.\n");
+				os_printf("[%s] Call to accept() would block.\n", __FUNCTION__);
 			}
 			if (xSemaphoreGive(accept_semaphore) != pdTRUE) {
-				os_printf("[%s] FATAL: Failed to return semaphore on error.\n", __FUNCTION__);
+				os_printf("[%s] %d FATAL: Failed to give accept_semaphore.\n", __FUNCTION__, __LINE__);
 				while (1) vTaskDelay(1000);
 			}
 			goto accept_end;
 		} else if (num_clients < MAX_CLIENT_NUM) {
 			os_printf("[%s] received address <%s>\n", __FUNCTION__, ptr ? ptr : "None");
-			xSemaphoreTake(client_list_mutex, portMAX_DELAY);
-			os_printf("Accepted client %d.\n", client);
+			if (xSemaphoreTake(client_list_mutex, portMAX_DELAY) != pdTRUE) {
+				os_printf("[%s] %d FATAL: Failed to take client_list_mutex.\n", __FUNCTION__, __LINE__);
+				while (1) vTaskDelay(1000);
+			}
+			os_printf("[%s] Accepted client %d.\n", __FUNCTION__, client, __FUNCTION__);
 			int option = 1;
 			int res = setsockopt(client, SOL_SOCKET, SO_KEEPALIVE, &option, sizeof(option));
 			if (res < 0) {
-				os_printf("Error setting SO_KEEPALIVE option for client socket %d: %s\n", num_clients, strerror(errno));
+				os_printf("[%s] Error setting SO_KEEPALIVE option for client socket %d: %s\n", __FUNCTION__, num_clients, strerror(errno));
 				goto accept_cleanup;
 			} 
 			int keep_idle = 30; // Time in seconds until the first probe on an idle connection
 			res = setsockopt(client, IPPROTO_TCP, TCP_KEEPIDLE, &keep_idle, sizeof(keep_idle));
 			if (res < 0) {
-				os_printf("Error setting TCP_KEEPIDLE option for server socket: %s\n", strerror(errno));
+				os_printf("[%s] Error setting TCP_KEEPIDLE option for server socket: %s\n", __FUNCTION__, strerror(errno));
 				goto accept_cleanup;
 			} 
 			
@@ -342,7 +347,7 @@ void accept_task(void *arg) {
 			int keep_intvl = 5; // Time in seconds between subsequent probes
 			res = setsockopt(client, IPPROTO_TCP, TCP_KEEPINTVL, &keep_intvl, sizeof(keep_intvl));
 			if (res < 0) {
-				os_printf("Error setting TCP_KEEPINTVL option for server socket: %s\n", strerror(errno));
+				os_printf("[%s] Error setting TCP_KEEPINTVL option for server socket: %s\n", __FUNCTION__, strerror(errno));
 				goto accept_cleanup;
 			}
 			
@@ -350,13 +355,13 @@ void accept_task(void *arg) {
 			int keep_cnt = 3; // Number of probes before connection is considered dead
 			res = setsockopt(client, IPPROTO_TCP, TCP_KEEPCNT, &keep_cnt, sizeof(keep_cnt));
 			if (res < 0) {
-				os_printf("Error setting TCP_KEEPCNT option for server socket: %s\n", strerror(errno));
+				os_printf("[%s] Error setting TCP_KEEPCNT option for server socket: %s\n", __FUNCTION__, strerror(errno));
 				goto accept_cleanup;
 			}
 			
 			int flags = fcntl(client, F_GETFL, 0);
 			if (flags < 0) {
-				os_printf("Error getting socket flags: %s\n", strerror(errno));
+				os_printf("[%s] Error getting socket flags: %s\n", __FUNCTION__, strerror(errno));
 				goto accept_cleanup;
 			}
 			
@@ -364,13 +369,13 @@ void accept_task(void *arg) {
 			flags |= O_NONBLOCK;
 			
 			if (fcntl(client, F_SETFL, flags) < 0) {
-				os_printf("Error setting socket flags: %s\n", strerror(errno));
+				os_printf("[%s] Error setting socket flags: %s\n", __FUNCTION__, strerror(errno));
 				goto accept_cleanup;
 			}
 			active_ptr[num_clients++] = client;
-			os_printf("Added client\nNumber of clients: %d\n", num_clients);
+			os_printf("[%s] Number of clients: %d\n", __FUNCTION__, num_clients);
 			if (xSemaphoreGive(client_list_mutex) != pdTRUE) {
-				os_printf("[%s] FATAL: failed to give client_list_mutex \n", __FUNCTION__);
+				os_printf("[%s] %d FATAL: Failed to give client_list_mutex.\n", __FUNCTION__, __LINE__);
 			}
 			goto accept_end;
 		}
@@ -391,7 +396,7 @@ int parse_http(http_packet_t *packet, http_request_info_t *req_info) {
 	*req_info = (http_request_info_t){};
 	char* line_end = strstr(packet->buf, "\r\n");
     if (line_end == NULL) {
-        os_printf("Error: Malformed request line (no CRLF).\n");
+        os_printf("[%s] Error: Malformed request line (no CRLF).\n", __FUNCTION__);
 		req_info->http_return_code = HTTP_ERROR_BAD_REQUEST;
         return 1;
     }
@@ -404,14 +409,14 @@ int parse_http(http_packet_t *packet, http_request_info_t *req_info) {
 
     char* first_space = strchr(packet->buf, ' ');
     if (first_space == NULL || first_space >= line_end) {
-        os_printf("Error: Malformed request line (no space after method).\n");
+        os_printf("[%s] Error: Malformed request line (no space after method).\n", __FUNCTION__);
         *line_end = '\r';
 		req_info->http_return_code = HTTP_ERROR_BAD_REQUEST;
         return 1;
     }
     size_t method_len = first_space - packet->buf;
     if (method_len >= 8) {
-        os_printf("Error: Method too long.\n");
+        os_printf("[%s] Error: Method too long.\n", __FUNCTION__);
         *line_end = '\r'; 
 		req_info->http_return_code = HTTP_ERROR_BAD_REQUEST;
         return 1;
@@ -419,18 +424,17 @@ int parse_http(http_packet_t *packet, http_request_info_t *req_info) {
     memcpy(req_info->method, packet->buf, method_len);
     req_info->method[method_len] = '\0';
 
-    // --- Parse Path ---
     char* path_start = first_space + 1;
     char* second_space = strchr(path_start, ' ');
     if (second_space == NULL || second_space >= line_end) {
-        os_printf("Error: Malformed request line (no space after path).\n");
+        os_printf("[%s] Error: Malformed request line (no space after path).\n", __FUNCTION__);
         *line_end = '\r'; 
 		req_info->http_return_code = HTTP_ERROR_BAD_REQUEST;
         return 1;
     }
     size_t path_len = second_space - path_start;
 	if (path_len >= 8) {
-        os_printf("Error: Path too long.\n");
+        os_printf("[%s] Error: Path too long.\n", __FUNCTION__);
         *line_end = '\r';
 		req_info->http_return_code = HTTP_ERROR_BAD_REQUEST;
         return 1;
@@ -441,7 +445,7 @@ int parse_http(http_packet_t *packet, http_request_info_t *req_info) {
 	char* version_start = second_space + 1;
 	size_t version_len = line_end - version_start; 
 	if (version_len >= 10) {
-        os_printf("Error: Version string too long.\n");
+        os_printf("[%s] Error: Version string too long.\n", __FUNCTION__);
         *line_end = '\r'; 
 		req_info->http_return_code = HTTP_ERROR_BAD_REQUEST;
         return 1;
@@ -452,21 +456,21 @@ int parse_http(http_packet_t *packet, http_request_info_t *req_info) {
     // Restore the original character at line_end
     *line_end = '\r';
 
-    os_printf("Parsed Request: Method='%s', Path='%s', Version='%s'\n", req_info->method, req_info->path, req_info->version);
+    os_printf("[%s] Parsed Request: Method='%s', Path='%s', Version='%s'\n", __FUNCTION__, req_info->method, req_info->path, req_info->version);
 
 	if (strcmp(req_info->method, "GET")) {
-		os_printf("Cannot handle %s method\n", req_info->method);
+		os_printf("[%s] Cannot handle %s method\n", __FUNCTION__, req_info->method);
 		req_info->http_return_code = HTTP_ERROR_METHOD_NOT_ALLOWED;
 		return 2;
 	}
 	if (strcmp(req_info->path, "/")) {
-		os_printf("Cannot handle path %s\n", req_info->path);
+		os_printf("[%s] Cannot handle path %s\n", __FUNCTION__, req_info->path);
 		req_info->http_return_code = HTTP_ERROR_NOT_FOUND;
 		return 3;
 	}
 	// Handle only HTTP/1.1 requests
 	if (strcmp(req_info->version, "HTTP/1.1")) {
-		os_printf("Cannot handle HTTP version %s\n", req_info->version);
+		os_printf("[%s] Cannot handle HTTP version %s\n", __FUNCTION__, req_info->version);
 		req_info->http_return_code = HTTP_ERROR_VERSION_NOT_SUPPORTED;
 		return 4;
 	}
@@ -495,7 +499,7 @@ void client_task(void *arg) {
 
         // Protect access to the shared list of client sockets
         if (xSemaphoreTake(client_list_mutex, portMAX_DELAY) != pdTRUE) {
-			os_printf("FATAL: client_task failed to take semaphore.\n");
+			os_printf("[%s] %d FATAL: Failed to take client_list_mutex.\n", __FUNCTION__, __LINE__);
 			while (1) vTaskDelay(1000);
 		}
         // Populate the fd_sets and find max_fd
@@ -514,7 +518,7 @@ void client_task(void *arg) {
 		if (max_fd == 0 || num_clients == 0) {
 			os_printf("[%s]: No active clients, delaying.\n", __FUNCTION__);
 			if (xSemaphoreGive(client_list_mutex) != pdTRUE) {
-				os_printf("[%s]: FATAL: failed to give semaphore.\n", __FUNCTION__);
+				os_printf("[%s] %d FATAL: Failed to give client_list_mutex.\n", __FUNCTION__, __LINE__);
 				while (1) vTaskDelay(1000);
 			}
 			vTaskDelay(2000 / portTICK_RATE_MS); // Delay if no clients to monitor
@@ -523,9 +527,9 @@ void client_task(void *arg) {
 
 		int activity = lwip_select(max_fd + 1, &read_fds, &write_fds, &except_fds, &timeout);
         if (activity < 0) {
-            os_printf("Select error %d: %s\n", errno, strerror(errno));
+            os_printf("[%s] Select error %d: %s\n", __FUNCTION__, errno, strerror(errno));
 			if (xSemaphoreGive(client_list_mutex) != pdTRUE) {
-				os_printf("FATAL: client_task failed to give client_list_mutex.\n");
+				os_printf("[%s] %d FATAL: Failed to give client_list_mutex.\n", __FUNCTION__, __LINE__);
 				while (1) vTaskDelay(1000);
 			}
 			vTaskDelay(2000 / portTICK_RATE_MS);
@@ -534,9 +538,9 @@ void client_task(void *arg) {
 
         if (activity == 0) {
             // Timeout occurred, no activity.
-            os_printf("Select timeout, no activity.\n");
+            os_printf("[%s] Select timeout, no activity.\n", __FUNCTION__);
 			if (xSemaphoreGive(client_list_mutex) != pdTRUE) {
-				os_printf("FATAL: client_task failed to give client_list_mutex.\n");
+				os_printf("[%s] %d FATAL: Failed to give client_list_mutex.\n", __FUNCTION__, __LINE__);
 				while (1) vTaskDelay(1000);
 			}
 			vTaskDelay(2000 / portTICK_RATE_MS);
@@ -548,7 +552,7 @@ void client_task(void *arg) {
 			packet = (http_packet_t){};
             // Check for error(s)
             if (FD_ISSET(curr_client, &except_fds)) {
-				os_printf("Client socket %d detected exceptional condition. Closing.\n", curr_client);
+				os_printf("[%s] Client socket %d detected exceptional condition. Closing.\n", __FUNCTION__, curr_client);
 				close(curr_client);
 				if (xSemaphoreGive(accept_semaphore) != pdTRUE) {
 					os_printf("[%s] %d FATAL: Failed to give accept_semaphore.\n", __FUNCTION__, __LINE__);
@@ -560,7 +564,7 @@ void client_task(void *arg) {
             // Only check read_fds if the socket didn't err
             if (FD_ISSET(curr_client, &read_fds)) {
 				// Attempt to read data
-				os_printf("Reading from client %d\n", curr_client);
+				os_printf("[%s] Reading from client %d\n",__FUNCTION__, curr_client);
 				char buf[1024];
 				bool header_complete = false;
 
@@ -632,7 +636,7 @@ void client_task(void *arg) {
 		active_ptr = temp;
 		os_printf("[%s] releasing client_list_mutex.\n", __FUNCTION__);
 		if (xSemaphoreGive(client_list_mutex) != pdTRUE) {
-			os_printf("FATAL: client_task failed to give client_list_mutex.\n");
+			os_printf("[%s] %d FATAL: Failed to give client_list_mutex.\n", __FUNCTION__, __LINE__);
 			while (1) vTaskDelay(1000);
 		}
 		vTaskDelay(2000 / portTICK_RATE_MS);

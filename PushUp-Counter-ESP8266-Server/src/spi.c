@@ -31,21 +31,20 @@ void init_spi(void) {
 
 void ICACHE_FLASH_ATTR spi_callback(void *arg) {
 	uint32_t regvalue, write_status, read_status, counter;
-	os_printf("ISR triggered\n");
+	os_printf("[%s] ISR triggered\n", __FUNCTION__);
 	if (READ_PERI_REG(0x3ff00020) & BIT4) {
 		//following 3 lines is to clear isr signal
 		CLEAR_PERI_REG_MASK(SPI_SLAVE(SpiNum_SPI), 0x3ff);
 	} else if (READ_PERI_REG(0x3ff00020) & BIT7) {
 		regvalue = READ_PERI_REG(SPI_SLAVE(SpiNum_HSPI));
-		os_printf("spi_slave_isr_sta SPI_SLAVE[0x%08x]\n\r",
-			regvalue);
+		os_printf("[%s] spi_slave_isr_sta SPI_SLAVE[0x%08x]\n\r", __FUNCTION__, regvalue);
 		SPIIntClear(SpiNum_HSPI);
 		// SET_PERI_REG_MASK(SPI_SLAVE(SpiNum_HSPI), SPI_SYNC_RESET);
 		// SPIIntClear(SpiNum_HSPI);
 		if (regvalue & SPI_SLV_WR_BUF_DONE) {
 		// User can get data from the W0~W7
-			os_printf("spi_slave_isr_sta : SPI_SLV_WR_BUF_DONE\n\r");
-			os_printf("registers: %x, ", READ_PERI_REG(SPI_W0(SpiNum_HSPI)));
+			os_printf("[%s] spi_slave_isr_sta : SPI_SLV_WR_BUF_DONE\n", __FUNCTION__);
+			os_printf("[%s] registers: %x, ", __FUNCTION__, READ_PERI_REG(SPI_W0(SpiNum_HSPI)));
 			os_printf("%x, ", READ_PERI_REG(SPI_W1(SpiNum_HSPI)));
 			os_printf("%x, ", READ_PERI_REG(SPI_W2(SpiNum_HSPI)));
 			os_printf("%x, ", READ_PERI_REG(SPI_W3(SpiNum_HSPI)));
@@ -63,26 +62,26 @@ void ICACHE_FLASH_ATTR spi_callback(void *arg) {
 			os_printf("%x\n", READ_PERI_REG(SPI_W15(SpiNum_HSPI)));
 			// Send data back to Arduino to check
 			count = READ_PERI_REG(SPI_W0(SpiNum_HSPI));
-			os_printf("Count: %x\n", count);
+			os_printf("[%s] count: %x\n", __FUNCTION__, count);
 
 		} else if (regvalue & SPI_SLV_RD_BUF_DONE) {
 		// TO DO
-			os_printf("spi_slave_isr_sta : SPI_SLV_RD_BUF_DONE\n\r");
+			os_printf("[%s] spi_slave_isr_sta : SPI_SLV_RD_BUF_DONE\n", __FUNCTION__);
 		}
 		if (regvalue & SPI_SLV_RD_STA_DONE) {
 			// read_status = READ_PERI_REG(SPI_RD_STATUS(SpiNum_HSPI));
 			// write_status = READ_PERI_REG(SPI_WR_STATUS(SpiNum_HSPI));
-			os_printf("spi_slave_isr_sta :SPI_SLV_RD_STA_DONE[R=0x%08x,W=0x%08x]\n\r", read_status, write_status);
+			os_printf("[%s] spi_slave_isr_sta :SPI_SLV_RD_STA_DONE[R=0x%08x,W=0x%08x]\n", __FUNCTION__, read_status, write_status);
 		}
 		if (regvalue & SPI_SLV_WR_STA_DONE) {
 			// read_status = READ_PERI_REG(SPI_RD_STATUS(SpiNum_HSPI));
 			// write_status = READ_PERI_REG(SPI_WR_STATUS(SpiNum_HSPI));
-			os_printf("spi_slave_isr_sta :SPI_SLV_WR_STA_DONE[R=0x%08x,W=0x%08x]\n\r", read_status, write_status);
+			os_printf("[%s] spi_slave_isr_sta :SPI_SLV_WR_STA_DONE[R=0x%08x,W=0x%08x]\n", __FUNCTION__, read_status, write_status);
 		}
 		if (regvalue & SPI_TRANS_DONE) {
 			WRITE_PERI_REG(SPI_RD_STATUS(SpiNum_HSPI), 0x8A);
 			WRITE_PERI_REG(SPI_WR_STATUS(SpiNum_HSPI), 0x83);
-			os_printf("spi_slave_isr_sta : SPI_TRANS_DONE\n\r");
+			os_printf("[%s] spi_slave_isr_sta : SPI_TRANS_DONE\n", __FUNCTION__);
 		}
 		new = true;
 
@@ -161,7 +160,7 @@ void spi_task(void *arg) {
 				| SpiIntSrc_RdBufDoneEn);
 			new = false;
 		}
-		os_printf("count: 0x%x\n", count);
+		os_printf("[%s] count: 0x%x\n", __FUNCTION__, count);
 		vTaskDelay(1000/portTICK_RATE_MS);
 	}
 }
