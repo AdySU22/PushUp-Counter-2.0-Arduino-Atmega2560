@@ -1,9 +1,9 @@
-// Description: Function prototypes for switch.cpp
-//----------------------------------------------------------------------//
+#ifndef SWITCH_H__
+#define SWITCH_H__
 
-#ifndef SWITCH_H
-#define SWITCH_H
+#include "common.h"
 
-void initSwitchPB3();
+void init_reset_switch_pin(void);
+void toggle_reset_switch(void);
 
-#endif
+#endif // SWITCH_H__
